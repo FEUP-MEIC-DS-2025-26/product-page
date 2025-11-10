@@ -1,0 +1,109 @@
+// --- Generator ---
+generator client {
+  provider = "prisma-client-js"   // usa o default
+  // remove o "output = ../app/generated/prisma" para não partir os imports
+}
+
+// --- Datasource ---
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Tabelas Principais ---
+model User {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
+  first_name    String?
+  last_name     String?
+  email         String    @unique
+  password_hash String
+  photo_url     String?
+  created_at    DateTime  @default(now())
+
+  products      Product[]   @relation("CreatedProducts")
+  reviews       Review[]
+  wishlistItems Wishlist[]
+  reviewVotes   ReviewVote[]
+}
+
+model Product {
+  id            Int       @id @default(autoincrement())
+  title         String
+  storytelling  String?
+  description   String?
+  price         Decimal    @db.Decimal(10,2)  // tipar no Postgres
+  avg_score     Float      @default(0)
+  specifications Json?
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+  deleted_at    DateTime?
+
+  created_by_user_id Int
+  created_by         User   @relation("CreatedProducts", fields: [created_by_user_id], references: [id])
+
+  photos        ProductPhoto[]
+  reviews       Review[]
+  wishlistItems Wishlist[]
+}
+
+model ProductPhoto {
+  id         Int     @id @default(autoincrement())
+  photo_url  String
+  alt_text   String?
+  is_main    Boolean @default(false)
+
+  product_id Int
+  product    Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@index([product_id])
+}
+
+model Review {
+  id            Int      @id @default(autoincrement())
+  score         Int
+  comment       String?
+  like_count    Int      @default(0)
+  dislike_count Int      @default(0)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  deleted_at    DateTime?
+
+  product_id Int
+  product    Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  user_id Int
+  user    User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  reviewVotes ReviewVote[]
+
+  @@index([product_id])
+  @@index([user_id])
+}
+
+// --- Tabelas de Junção ---
+model Wishlist {
+  user_id    Int
+  product_id Int
+  user       User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  product    Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, product_id])
+  @@index([product_id])
+}
+
+enum VoteType {
+  LIKE
+  DISLIKE
+}
+
+model ReviewVote {
+  user_id   Int
+  review_id Int
+  user      User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  review    Review @relation(fields: [review_id], references: [id], onDelete: Cascade)
+  vote_type VoteType
+
+  @@id([user_id, review_id])
+  @@index([review_id])
+}

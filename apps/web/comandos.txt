@@ -1,0 +1,17 @@
+---
+
+npm install (só uma vez)
+npm run dev
+docker run --name product-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=product-page -p 5433:5432 -d postgres:16
+
+---
+
+# .env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/product-page?schema=public"
+
+# QUANDO ALTERARES o ficheiro 'prisma/schema.prisma':
+# (Tens de criar uma nova migração para aplicar as mudanças)
+npx prisma migrate dev --name <nome_descritivo_da_tua_alteracao>
+# Se o VS Code se queixar de tipos (Cannot find module '@prisma/client'):
+npx prisma generate
