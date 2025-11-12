@@ -1,6 +1,11 @@
 version: '3.8'
+
 services:
+  ###################################
+  # NEXT.JS (Main backend/frontend)
+  ###################################
   web:
+    container_name: next_web
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,26 +15,83 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://user:password@db:5432/productconfig
       - REDIS_URL=redis://redis:6379
-    restart: unless-stopped
-    networks:
-      - app-network
     depends_on:
       - db
       - redis
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  ###################################
+  # MIPS HOST (Module Federation shell)
+  ###################################
+  mips_host:
+    container_name: mips_host
+    build:
+      context: ./apps/mips_host
+      dockerfile: Dockerfile
+    command: pnpm dev
+    ports:
+      - "3100:3000"
+    environment:
+      - NODE_ENV=production
+      - REMOTE_PRODUCT_PAGE_URL=http://mips_product_page:3001/mf-manifest.json
+      - REMOTE_CART_URL=http://mips_shopping_cart:3002/mf-manifest.json
+    networks:
+      - app-network
+    depends_on:
+      - mips_product_page
+      - mips_shopping_cart
+
+  ###################################
+  # MIPS PRODUCT PAGE
+  ###################################
+  mips_product_page:
+    container_name: mips_product_page
+    build:
+      context: ./apps/mips_product_page
+      dockerfile: Dockerfile
+    command: pnpm dev
+    ports:
+      - "3101:3001"
+    networks:
+      - app-network
+
+  ###################################
+  # MIPS SHOPPING CART
+  ###################################
+  mips_shopping_cart:
+    container_name: mips_shopping_cart
+    build:
+      context: ./apps/mips_shopping_cart
+      dockerfile: Dockerfile
+    command: pnpm dev
+    ports:
+      - "3102:3002"
+    networks:
+      - app-network
+
+  ###################################
+  # POSTGRES DATABASE
+  ###################################
   db:
     image: postgres:15-alpine
     container_name: postgres-db
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: productconfig 
+      POSTGRES_DB: productconfig
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432" 
+      - "5433:5432"
     networks:
       - app-network
     restart: unless-stopped
+
+  ###################################
+  # REDIS CACHE
+  ###################################
   redis:
     image: redis:7-alpine
     container_name: redis-cache

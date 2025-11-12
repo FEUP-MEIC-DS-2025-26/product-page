@@ -1,74 +1,101 @@
-# Use the official Node.js runtime as the base image
+#####################################################
+# 1. Base image para todos os apps
+#####################################################
 FROM node:22-alpine AS base
 
-# Install dependencies only when needed
-FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat curl
+
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
-COPY package.json package-lock.json* ./
-RUN \
-    if [ -f package-lock.json ]; then npm ci --only=production --legacy-peer-deps; \
-    else echo "Lockfile not found." && exit 1; \
-    fi
+#####################################################
+# 2. Dependências do web (Next.js + Prisma)
+#####################################################
+FROM base AS deps-web
 
-# Rebuild the source code only when needed
-FROM base AS builder
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
+
+# Copiar ficheiros de package para cache
+COPY package.json package-lock.json* ./
+
+# Instalar dependências de produção
+RUN npm ci --legacy-peer-deps
+
+#####################################################
+# 3. Builder do web
+#####################################################
+FROM base AS builder-web
+
 WORKDIR /app
 
-# Install all dependencies (including devDependencies) for building
-COPY package.json package-lock.json* ./
-RUN \
-    if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; \
-    else echo "Lockfile not found." && exit 1; \
-    fi
-
+# Copiar todos os ficheiros da aplicação web
 COPY . .
 
-# Next.js collects completely anonymous telemetry data about general usage.
-# Learn more here: https://nextjs.org/telemetry
-# Uncomment the following line in case you want to disable telemetry during the build.
-# ENV NEXT_TELEMETRY_DISABLED 1
+# Copiar schema Prisma antes de gerar client
+COPY prisma ./prisma
 
+# Gerar Prisma client
+RUN npx prisma generate
+
+# Copiar node_modules do stage deps
+COPY --from=deps-web /app/node_modules ./node_modules
+
+# Desabilitar telemetry do Next.js
+ENV NEXT_TELEMETRY_DISABLED 1
+
+# Build do Next.js
 RUN npm run build
 
-# Production image, copy all the files and run next
-FROM base AS runner
+#####################################################
+# 4. Runner do web
+#####################################################
+FROM base AS runner-web
+
 WORKDIR /app
 
-ENV NODE_ENV production
-# Uncomment the following line in case you want to disable telemetry during runtime.
-# ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN apk add --no-cache curl
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# Criar usuário não-root
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+# Copiar build e assets
+COPY --from=builder-web /app/public ./public
+COPY --from=builder-web /app/.next/standalone ./
+COPY --from=builder-web /app/.next/static ./.next/static
+COPY --from=builder-web /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder-web /app/prisma ./prisma
 
-# Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+RUN chown -R nextjs:nodejs /app
 
 USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
-# set hostname to localhost
-ENV HOSTNAME "0.0.0.0"
-
-# Add healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/api/health || exit 1
+  CMD curl -f http://localhost:3000/api/health || exit 1
 
-# server.js is created by next build from the standalone output
-# https://nextjs.org/docs/pages/api-reference/next-config-js/output
 CMD ["node", "server.js"]
+
+#####################################################
+# 5. Micro-frontends (MIPS)
+# Cada MFE pode usar o mesmo template
+#####################################################
+# Base image para MIPS apps
+FROM node:25-alpine3.21 AS base-mfe
+
+# Instalar pnpm
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# Função para gerar Dockerfile para cada MFE
+# Exemplo: mips_host, mips_product_page, mips_shopping_cart
+# No docker-compose.yml podemos referenciar o contexto + Dockerfile desta forma:
+
+# COPY package.json e pnpm-lock
+# RUN pnpm install --frozen-lockfile
+# COPY restante código
+# ENV HOST=0.0.0.0
