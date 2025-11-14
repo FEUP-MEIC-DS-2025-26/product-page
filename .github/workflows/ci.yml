@@ -69,8 +69,8 @@ jobs:
             -f apps/mips_shopping_cart/Dockerfile \
             -t mips-shopping-cart:latest
             
-      - name: Build Docker image for web (root Dockerfile)
-        run: |
-          docker build . \
-            -f Dockerfile \
-            -t mips-web:latest
+      #- name: Build Docker image for web (root Dockerfile)
+      #  run: |
+      #    docker build . \
+      #      -f Dockerfile \
+      #      -t mips-web:latest
