@@ -1,17 +1,17 @@
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Link from '@mui/material/Link'; // Usamos o Link do MUI
+import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import Avatar from '@mui/material/Avatar';
+import PersonIcon from '@mui/icons-material/Person';
 
-// O Ícone SVG (copiado diretamente, está perfeito)
 const HamburgerIcon = () => (
   <svg
-    className="w-8 h-8 text-[#344E41]" // O className aqui funciona porque o SVG o trata
     fill="none"
     stroke="currentColor"
     viewBox="0 0 24 24"
     xmlns="http://www.w3.org/2000/svg"
-    style={{ width: 32, height: 32, color: '#344E41' }} // Adicionado style para garantir
+    style={{ width: 28, height: 28 }}
   >
     <path
       strokeLinecap="round"
@@ -22,108 +22,132 @@ const HamburgerIcon = () => (
   </svg>
 );
 
-// 1. Dados "dummy" para o utilizador (substituindo o Prisma)
 const dummyUser = {
   first_name: 'Diddy',
-  photo_url: '/default-avatar.png', // Assumindo que tem um avatar default
+  photo_url: '/default-avatar.png',
 };
 
 export default function Navbar() {
-  const user = dummyUser; // Usamos o utilizador dummy
+  const user = dummyUser;
 
   return (
     <Box
       component="nav"
-      // 2. Estilos Tailwind "traduzidos" para 'sx' do MUI
       sx={{
         bgcolor: '#DAD7CD',
-        borderTop: '1px solid rgba(52, 78, 65, 0.3)',
-        borderBottom: '1px solid rgba(52, 78, 65, 0.3)',
-        px: { xs: 2, sm: 3 }, // px-4 sm:px-6
-        py: 2,
+        borderTop: '1px solid rgba(0,0,0,0.6)',
+        borderBottom: '1px solid rgba(0,0,0,0.6)',
+        px: { xs: 2, sm: 3 },
+        py: 1.8,
       }}
     >
       <Box
         sx={{
           display: 'grid',
-          // 3. Usamos '1fr auto 1fr' para centrar o logo perfeitamente
           gridTemplateColumns: '1fr auto 1fr',
           alignItems: 'center',
           width: '100%',
         }}
       >
-        {/* 1. Esquerda: Ícone Hamburger */}
+        {/* Esquerda – Hamburger */}
         <Box sx={{ justifySelf: 'start' }}>
-          <Button
+          <IconButton
+            aria-label="Toggle menu"
+            disableRipple
             sx={{
-              p: 0.5, // p-1
-              minWidth: 0,
-              borderRadius: '6px', // rounded-md
+              p: 0,
+              color: '#000000',
               '&:hover': {
-                bgcolor: 'rgba(0, 0, 0, 0.1)', // hover:bg-black/10
+                bgcolor: 'transparent',
               },
             }}
-            aria-label="Toggle menu"
           >
             <HamburgerIcon />
-          </Button>
+          </IconButton>
         </Box>
 
-        {/* 2. Centro: Logo (usando MUI Link e Typography) */}
+        {/* Centro – Logo */}
         <Box sx={{ justifySelf: 'center' }}>
           <Link
             href="/"
-            underline="none" // Remover sublinhado
+            underline="none"
             sx={{
-              fontSize: { xs: '1.5rem', sm: '1.875rem' }, // text-2xl sm:text-3xl
-              fontWeight: 'bold',
+              fontSize: { xs: '1rem', sm: '1.5rem' },
+              fontWeight: 700,
               fontStyle: 'italic',
               whiteSpace: 'nowrap',
               display: 'flex',
               alignItems: 'baseline',
+              color: 'inherit',
+              '& span:not(.store)': {
+                fontSize: 'inherit',
+                lineHeight: 1,
+              },
             }}
           >
-            {/* 4. Spans traduzidos para Typography com 'sx' para cor */}
-            <Typography component="span" sx={{ color: '#DC2626' }}>{/* text-red-600 */}
+            {/* made */}
+            <Typography component="span" sx={{ color: '#b22222', fontWeight: 700 }}>
               made
             </Typography>
-            <Typography component="span" sx={{ color: '#D97706' }}>{/* text-yellow-500 */}
-              in
-            </Typography>
-            <Typography component="span" sx={{ color: '#65A30D' }}>{/* text-lime-600 */}
-              portugal
-            </Typography>
+
+            {/* in */}
             <Typography
               component="span"
+              sx={{ color: '#ecbd04ff', fontWeight: 700 }}
+            >
+              in
+            </Typography>
+
+            {/* portugal */}
+            <Typography component="span" sx={{ color: '#2e8b57', fontWeight: 700 }}>
+              portugal
+            </Typography>
+
+            {/* .store */}
+            <Typography
+              component="span"
+              className="store"
               sx={{
-                color: '#4B5563', // text-gray-600
-                fontSize: { xs: '1.25rem', sm: '1.5rem' }, // text-xl sm:text-2xl
-                fontWeight: 'normal',
-                fontStyle: 'normal', // Resetar o itálico
+                color: '#4B5563',
+                fontWeight: 600,
+                fontStyle: 'normal',
+                fontSize: '1rem',
+                ml: 0.3,
+                position: 'relative',
+                top: '-0.1em',
               }}
             >
               .store
             </Typography>
+
           </Link>
         </Box>
 
-        {/* 3. Direita: Ícone de Perfil (usando MUI Link e Box como <img>) */}
+        {/* Direita */}
         <Box sx={{ justifySelf: 'end' }}>
-          <Link href="/profile">
-            {/* 5. Next/Image traduzido para um Box com 'img' e 'sx' */}
-            <Box
-              component="img"
-              src={user?.photo_url || '/default-avatar.png'}
-              alt={user?.first_name || 'User profile picture'}
+          <Link
+            href="/profile"
+            underline="none"
+            sx={{
+              color: 'inherit',
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
+          >
+            <Avatar
               sx={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%', // rounded-full
-                border: '1px solid #344E41', // border border-[#344E41]
-                objectFit: 'cover', // object-cover
-                aspectRatio: '1 / 1', // aspect-square
+                width: 32,
+                height: 32,
+                bgcolor: '#000000',
               }}
-            />
+            >
+              <PersonIcon
+                sx={{
+                  fontSize: 20,
+                  color: '#FFFFFF',
+                }}
+              />
+            </Avatar>
           </Link>
         </Box>
       </Box>

@@ -1,20 +1,9 @@
 body {
   margin: 0;
-  color: #fff;
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  /* O background-image foi movido para o <Box> do App.tsx 
-    para que o Footer (que é claro) não seja coberto por ele. 
-  */
+
 }
 
-/* Removemos:
-  - display: flex
-  - min-height: 100vh
-  - flex-direction: column
-  - justify-content: center
-  
-  O <Box> do MUI está a tratar disto tudo agora.
-*/
 .content-harness {
   line-height: 1.1;
   text-align: center;
