@@ -2,7 +2,7 @@
 FROM node:25-alpine3.21
 
 # Install pnpm
-RUN npm install -g pnpm
+RUN npm install -g pnpm@8
 
 # Set workdir
 WORKDIR /app
