@@ -13,7 +13,7 @@ const dummyProduct = {
   title: 'Galo de Barcelos',
   storytelling: 'Símbolo lendário de fé, sorte e perseverança, o Galo de Barcelos é uma das expressões mais emblemáticas da cultura popular portuguesa. Inspirado na famosa lenda do peregrino injustamente acusado, este galo ergue-se como um emblema de justiça e esperança. Cada detalhe do seu design reflete séculos de tradição passada entre gerações de artesãos que mantêm viva a alma do folclore português. Ao adquirir esta peça, apoia diretamente o trabalho manual local e contribui para a preservação das nossas raízes culturais.',
   
-  description: 'Este Galo de Barcelos é cuidadosamente moldado em cerâmica e pintado à mão por artesãos experientes de Barcelos, norte de Portugal. O processo de produção combina técnicas tradicionais com um toque moderno, garantindo uma peça vibrante, cheia de cor e caráter. Cada exemplar é único — pequenas variações na pintura e na textura conferem-lhe autenticidade e charme artesanal. Representando a célebre lenda em que um galo milagrosamente prova a inocência de um viajante, esta escultura é mais do que um objeto decorativo: é um símbolo de fé, justiça e boa sorte. Ideal para oferecer ou decorar espaços que valorizam cultura e identidade portuguesa.',
+  description: 'Este Galo de Barcelos é cuidadosamente moldado em cerâmica e pintado à mão por artesãos experientes de Barcelos, norte de Portugal. O processo de produção combina técnicas tradicionais com um toque moderno, garantindo uma peça vibrante, cheia de cor e caráter. Cada exemplar é único — pequenas variações na pintura e na textura conferem-lhe autenticidade e charme artesanal. Representando a célebre lenda em que um galo milagrosamente prova a inocência de um viajante, esta escultura é mais do que um objeto decorativo: é um símbolo de fé, justiça e boa sorte. Ideal para oferecer ou decorar espaços que valorizam cultura e identidade portuguesa. ',
   
   price: 29.99,
   avg_score: 4.5,
@@ -84,27 +84,34 @@ export default function ProductDetail() {
       <Box
         sx={{
           bgcolor: '#DAD7CD',
-          borderRadius: '24px', // rounded-3xl
-          p: { xs: 2, sm: 4 }, // p-6 sm:p-8
-          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)', // shadow-lg
+          borderRadius: '24px',
+          p: { xs: 2, sm: 4 },
+          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
         }}
       >
+        {/* Main grid: left and right areas */}
         <Grid
           container
           spacing={{ xs: 3, lg: 4 }}
           direction={isSmallScreen ? 'column' : 'row'}
-          wrap={isSmallScreen ? 'wrap' : 'nowrap'}
+          sx={{
+            flexWrap: isSmallScreen ? 'wrap' : 'nowrap',
+            alignItems: 'stretch',
+          }}
         >
           {/* Left: Product Image */}
           <Grid
             item
             xs={12}
-            lg={4.5}
+            md={4} // 1/3 of horizontal area on md+ screens
             sx={{
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
-              minWidth: { lg: 480 }, // Prevents right side from occupying left
+              minWidth: 0,
+              flexBasis: { md: '33.3333%' },
+              maxWidth: { md: '33.3333%' },
+              height: '100%',
             }}
           >
             <Box
@@ -179,14 +186,26 @@ export default function ProductDetail() {
           <Grid
             item
             xs={12}
-            lg={7.5}
+            md={8} // 2/3 of horizontal area on md+ screens
             sx={{
-              minWidth: { lg: 400 }, // Prevents left side from occupying right
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              flexBasis: { md: '66.6667%' },
+              maxWidth: { md: '66.6667%' },
+              height: '100%',
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%' }}>
+            <Box sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              justifyContent: 'flex-end', // push content to bottom
+              gap: 3,
+              flex: 1,
+            }}>
               {/* Box 1: Title + Description + Storytelling */}
-              <Box>
+              <Box sx={{ flexGrow: 1 }}>
                 {/* Title and Wishlist */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
                   <Typography
@@ -227,12 +246,25 @@ export default function ProductDetail() {
                     </svg>
                   </IconButton>
                 </Box>
-                <Typography variant="body2" sx={{ fontSize: { xs: '1.1rem', sm: '1.18rem' }, color: 'black', mb: 1.5, lineHeight: 1.65 }}>
-                  {product.description}
-                </Typography>
-                <Typography variant="body1" sx={{ fontSize: { xs: '1.1rem', sm: '1.18rem' }, fontWeight: '600', color: 'black', mb: 2 }}>
-                  {product.storytelling}
-                </Typography>
+                <Box
+                  sx={{
+                  height: 360, // fixed height, matches scroll threshold
+                  overflowY: 'auto',
+                  mb: 1.5,
+                }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontSize: { xs: '1.1rem', sm: '1.18rem' },
+                      color: 'black',
+                      lineHeight: 1.65,
+                      pr: 1,
+                    }}
+                  >
+                    {product.description}
+                  </Typography>
+                </Box>
               </Box>
 
               {/* Box 2: Price + Ratings */}
@@ -314,6 +346,39 @@ export default function ProductDetail() {
             </Box>
           </Grid>
         </Grid>
+
+        {/* New box for storytelling below the main grid */}
+        <Box
+          sx={{
+            bgcolor: '#F5F5F5',
+            borderRadius: '16px',
+            mt: 4,
+            p: { xs: 2, sm: 3 },
+          }}
+        >
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 'bold',
+              color: '#344E41',
+              mb: 1,
+              fontSize: { xs: '1.25rem', sm: '1.5rem' },
+            }}
+          >
+            História do Produto
+          </Typography>
+          <Typography
+            variant="body1"
+            sx={{
+              fontSize: { xs: '1.1rem', sm: '1.18rem' },
+              fontWeight: '600',
+              color: 'black',
+              whiteSpace: 'pre-line',
+            }}
+          >
+            {product.storytelling}
+          </Typography>
+        </Box>
       </Box>
       
       {/* Divider */}
