@@ -7,6 +7,7 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 // 1. MUDAR A IMPORTAÇÃO DE 'ProductPage' PARA 'ProductDetail'
 import ProductDetail from "./components/ProductDetail";
+import { ProductSpecifications } from "./components/ProductDetail";
 
 // O harness escuro já não é necessário, pois o ProductDetail
 // tem o seu próprio fundo claro (#DAD7CD).
@@ -60,6 +61,7 @@ const App = () => {
       >
         {/* 3. SUBSTITUIR O ProductPage PELO ProductDetail */}
         <ProductDetail />
+        <ProductSpecifications />
       </Box>
 
       <Footer />

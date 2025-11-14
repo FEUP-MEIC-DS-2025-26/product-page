@@ -7,7 +7,7 @@ import IconButton from '@mui/material/IconButton'; // Para o botão wishlist
 // --- DADOS FALSOS (Substituindo o Prisma) ---
 const dummyProduct = {
   id: 3,
-  title: 'Galo de Barcelos (Exemplo)',
+  title: 'Galo de Barcelos',
   storytelling: 'Uma peça icónica de artesanato português.',
   description: 'Este galo de Barcelos é pintado à mão por artesãos locais, usando técnicas tradicionais. Cada peça é única e representa uma história de folclore e cultura.',
   price: 29.99,
@@ -20,8 +20,17 @@ const dummyProduct = {
   specifications: [
     { title: 'Material', description: 'Cerâmica pintada à mão' },
     { title: 'Dimensões', description: '25cm x 15cm' },
+    { title: 'Peso', description: '0.8 kg' },
+    { title: 'Origem', description: 'Barcelos, Portugal' },
+    { title: 'Ano de produção', description: '2025' },
+    { title: 'Acabamento', description: 'Verniz protetor com brilho' },
+    { title: 'Cuidados', description: 'Limpar com pano seco; evitar produtos abrasivos' },
+    { title: 'Uso recomendado', description: 'Decoração interior' },
+    { title: 'Cor predominante', description: 'Preto com detalhes multicoloridos' },
+    { title: 'Certificação', description: 'Produto artesanal certificado (Licença IPHAN)' },
   ],
 };
+
 
 // --- COMPONENTE TRADUZIDO ---
 
@@ -243,6 +252,15 @@ export default function ProductDetail() {
       {/* Divider */}
       <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
 
+    </Box>
+  );
+}
+
+export function ProductSpecifications() {
+  const product = dummyProduct;
+
+  return (
+    <>
       {/* Additional Information Sections */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {product.specifications.map((spec, index) => (
@@ -259,7 +277,6 @@ export default function ProductDetail() {
 
       {/* Divider */}
       <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
-
-    </Box>
+    </>
   );
 }
