@@ -2,19 +2,19 @@ import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton'; // Para o botão wishlist
+import IconButton from '@mui/material/IconButton';
 import { useState } from 'react';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
+import React from 'react';
 
-// --- DADOS FALSOS (Substituindo o Prisma) ---
 const dummyProduct = {
   id: 3,
   title: 'Galo de Barcelos',
-  storytelling: 'Símbolo lendário de fé, sorte e perseverança, o Galo de Barcelos é uma das expressões mais emblemáticas da cultura popular portuguesa. Inspirado na famosa lenda do peregrino injustamente acusado, este galo ergue-se como um emblema de justiça e esperança. Cada detalhe do seu design reflete séculos de tradição passada entre gerações de artesãos que mantêm viva a alma do folclore português. Ao adquirir esta peça, apoia diretamente o trabalho manual local e contribui para a preservação das nossas raízes culturais.',
-  
-  description: 'Este Galo de Barcelos é cuidadosamente moldado em cerâmica e pintado à mão por artesãos experientes de Barcelos, norte de Portugal. O processo de produção combina técnicas tradicionais com um toque moderno, garantindo uma peça vibrante, cheia de cor e caráter. Cada exemplar é único — pequenas variações na pintura e na textura conferem-lhe autenticidade e charme artesanal. Representando a célebre lenda em que um galo milagrosamente prova a inocência de um viajante, esta escultura é mais do que um objeto decorativo: é um símbolo de fé, justiça e boa sorte. Ideal para oferecer ou decorar espaços que valorizam cultura e identidade portuguesa. ',
-  
+  storytelling:
+    'Símbolo lendário de fé, sorte e perseverança, o Galo de Barcelos é uma das expressões mais emblemáticas da cultura popular portuguesa. Inspirado na famosa lenda do peregrino injustamente acusado, este galo ergue-se como um emblema de justiça e esperança. Cada detalhe do seu design reflete séculos de tradição passada entre gerações de artesãos que mantêm viva a alma do folclore português. Ao adquirir esta peça, apoia diretamente o trabalho manual local e contribui para a preservação das nossas raízes culturais.',
+  description:
+    'Este Galo de Barcelos é cuidadosamente moldado em cerâmica e pintado à mão por artesãos experientes de Barcelos, norte de Portugal. O processo de produção combina técnicas tradicionais com um toque moderno, garantindo uma peça vibrante, cheia de cor e caráter. Cada exemplar é único — pequenas variações na pintura e na textura conferem-lhe autenticidade e charme artesanal. Representando a célebre lenda em que um galo milagrosamente prova a inocência de um viajante, esta escultura é mais do que um objeto decorativo: é um símbolo de fé, justiça e boa sorte. Ideal para oferecer ou decorar espaços que valorizam cultura e identidade portuguesa. ',
   price: 29.99,
   avg_score: 4.5,
   reviewCount: 3,
@@ -33,31 +33,31 @@ const dummyProduct = {
     { title: 'Origem', description: 'Barcelos, Portugal' },
     { title: 'Ano de produção', description: '2025' },
     { title: 'Acabamento', description: 'Verniz protetor com brilho' },
-    { title: 'Cuidados', description: 'Limpar com pano seco; evitar produtos abrasivos' },
+    {
+      title: 'Cuidados',
+      description: 'Limpar com pano seco; evitar produtos abrasivos',
+    },
     { title: 'Uso recomendado', description: 'Decoração interior' },
     { title: 'Cor predominante', description: 'Preto com detalhes multicoloridos' },
-    { title: 'Certificação', description: 'Produto artesanal certificado (Licença IPHAN)' },
+    {
+      title: 'Certificação',
+      description: 'Produto artesanal certificado (Licença IPHAN)',
+    },
   ],
 };
 
-
-
-// --- COMPONENTE TRADUZIDO ---
-
 export default function ProductDetail() {
-  const product = dummyProduct; // Usamos o produto falso
+  const product = dummyProduct;
   const photos = product.photos || [];
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const { reviewCount } = product;
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Função para renderizar estrelas (copiada e adaptada)
   const renderStars = (score: number) => {
     return Array.from({ length: 5 }, (_, i) => {
       const starNumber = i + 1;
       const isFilled = score >= starNumber;
-      // Não precisamos de meia estrela para este exemplo, simplifica
       return (
         <svg
           key={i}
@@ -66,7 +66,7 @@ export default function ProductDetail() {
           } stroke-[#3A5A40] stroke-2`}
           viewBox="0 0 24 24"
           xmlns="http://www.w3.org/2000/svg"
-          style={{ width: 40, height: 40 }} // Tamanho fixo para MUI
+          style={{ width: 32, height: 32 }}
         >
           <path
             strokeLinecap="round"
@@ -79,311 +79,412 @@ export default function ProductDetail() {
   };
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2 } }}> {/* Padding geral */}
-      {/* Main Product Card */}
+    <Box sx={{ py: { xs: 2, sm: 3 } }}>
       <Box
         sx={{
-          bgcolor: '#DAD7CD',
-          borderRadius: '24px',
-          p: { xs: 2, sm: 4 },
-          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
+          maxWidth: 1200,
+          mx: 'auto',
+          px: { xs: 1.5, sm: 3, md: 0 },
         }}
       >
-        {/* Main grid: left and right areas */}
-        <Grid
-          container
-          spacing={{ xs: 3, lg: 4 }}
-          direction={isSmallScreen ? 'column' : 'row'}
+        <Box
           sx={{
-            flexWrap: isSmallScreen ? 'wrap' : 'nowrap',
-            alignItems: 'stretch',
+            bgcolor: '#E4E1D6',
+            borderRadius: '24px',
+            p: { xs: 2, sm: 3, md: 4 },
+            boxShadow:
+              '0 10px 15px -3px rgba(0,0,0,0.12), 0 4px 6px -2px rgba(0,0,0,0.06)',
           }}
         >
-          {/* Left: Product Image */}
           <Grid
-            item
-            xs={12}
-            md={4} // 1/3 of horizontal area on md+ screens
+            container
+            columnSpacing={{ xs: 2, md: 2 }}
+            rowSpacing={isSmallScreen ? 2 : 0}
             sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              minWidth: 0,
-              flexBasis: { md: '33.3333%' },
-              maxWidth: { md: '33.3333%' },
-              height: '100%',
+               alignItems: 'strech',
+               flexWrap: { xs: 'wrap', md: 'nowrap' }
             }}
           >
-            <Box
+            <Grid
+              item
+              xs={12}
+              md={3}
               sx={{
-                bgcolor: '#274836',
-                borderRadius: '16px',
-                p: 2,
-                width: { xs: 340, sm: 400, lg: 480 },
-                height: { xs: 420, sm: 480, lg: 580 },
-                minHeight: { xs: 420, sm: 480, lg: 580 },
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'column',
-                gap: 1,
+                minWidth: 0,
+                height: '100%',
+                justifyContent: 'flex-end',
               }}
             >
               <Box
                 sx={{
-                  bgcolor: 'white',
-                  borderRadius: '8px',
-                  width: '100%',
-                  flex: 1,         // allow image area to grow within the taller container
-                  minHeight: 0,    // enable proper flexbox shrinking on some browsers
-                  overflow: 'hidden',
+                  bgcolor: '#274836',
+                  borderRadius: '16px',
+                  p: 2,
+                  width: { md: 450 },     
+                  height: { md: 550 },
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  flexDirection: 'column',
+                  gap: 1,
+                  
                 }}
               >
-                {/* imagem principal (selecionada) */}
                 <Box
-                  component="img"
-                  src={photos[selectedPhotoIndex]?.photo_url || product.mainPhoto.photo_url}
-                  alt={photos[selectedPhotoIndex]?.alt_text || product.title}
-                  sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                />
-              </Box>
-
-              {/* Miniaturas */}
-              {photos.length > 1 && (
-                <Box sx={{ display: 'flex', gap: 1.5, mt: 1 }}>
-                  {photos.map((p, i) => (
-                    <Box
-                      key={i}
-                      onClick={() => setSelectedPhotoIndex(i)}
-                      sx={{
-                        width: { xs: 56, sm: 72 },
-                        height: { xs: 56, sm: 72 },
-                        borderRadius: 1,
-                        overflow: 'hidden',
-                        border: i === selectedPhotoIndex ? '2px solid #344E41' : '2px solid transparent',
-                        cursor: 'pointer',
-                        bgcolor: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: i === selectedPhotoIndex
-                          ? '0 0 0 4px white, 0 0 12px 2px rgba(255,255,255,0.7)'
-                          : 'none', // white glow for selected
-                      }}
-                    >
-                      <Box component="img" src={p.photo_url} alt={p.alt_text} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Box>
-          </Grid>
-
-          {/* Right: Product Info */}
-          <Grid
-            item
-            xs={12}
-            md={8} // 2/3 of horizontal area on md+ screens
-            sx={{
-              minWidth: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              flexBasis: { md: '66.6667%' },
-              maxWidth: { md: '66.6667%' },
-              height: '100%',
-            }}
-          >
-            <Box sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              justifyContent: 'flex-end', // push content to bottom
-              gap: 3,
-              flex: 1,
-            }}>
-              {/* Box 1: Title + Description + Storytelling */}
-              <Box sx={{ flexGrow: 1 }}>
-                {/* Title and Wishlist */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
-                  <Typography
-                    variant="h3"
-                    component="h1"
+                  sx={{
+                    bgcolor: 'white',
+                    borderRadius: '8px',
+                    width: '100%',
+                    height: '100%',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={
+                      photos[selectedPhotoIndex]?.photo_url ||
+                      product.mainPhoto.photo_url
+                    }
+                    alt={photos[selectedPhotoIndex]?.alt_text || product.title}
                     sx={{
-                      fontSize: { xs: '2rem', sm: '2.25rem', lg: '2.75rem' },
-                      fontWeight: 'bold',
-                      color: '#344E41',
-                      lineHeight: 1.1,
+                      width: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 2,
+                    }}
+                  />
+                </Box>
+
+                {photos.length > 1 && (
+                  <Box sx={{ display: 'flex', gap: 2, mt: 0, justifyContent: 'center' }}>
+                    {photos.map((p, i) => (
+                      <Box
+                        key={i}
+                        onClick={() => setSelectedPhotoIndex(i)}
+                        sx={{
+                          width: { xs: 60, sm: 60 },
+                          height: { xs: 60, sm: 60 },
+                          borderRadius: 2,
+                          overflow: 'hidden',
+                          border:
+                            i === selectedPhotoIndex
+                              ? '2.5px solid #344E41'
+                              : '2.5px solid transparent',
+                          cursor: 'pointer',
+                          bgcolor: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow:
+                            i === selectedPhotoIndex
+                              ? '0 0 0 3px white, 0 0 10px 2px rgba(255,255,255,0.6)'
+                              : 'none',
+                          transition: 'all 0.18s',
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={p.photo_url}
+                          alt={p.alt_text}
+                          sx={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            </Grid>
+
+            {/* RIGHT – INFO */}
+            <Grid
+              item
+              xs={12}
+              md={9}
+              sx={{
+                minWidth: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                pl: { md: 3},
+                flex: 1, 
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '100%',
+                  justifyContent: 'space-between',
+                  gap: 3,
+                }}
+              >
+                {/* Título + descrição */}
+                <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      mb: 1,
+                      gap: 2,
                     }}
                   >
-                    {product.title}
-                  </Typography>
-                  <IconButton
-                    aria-label="Add to wishlist"
+                    <Typography
+                      variant="h3"
+                      component="h1"
+                      sx={{
+                        fontSize: {
+                          xs: '2rem',
+                          sm: '2.25rem',
+                          lg: '2.5rem',
+                        },
+                        fontWeight: 'bold',
+                        color: '#344E41',
+                        lineHeight: 1.1,
+                        wordBreak: 'break-word', 
+                      }}
+                    >
+                      {product.title}
+                    </Typography>
+                    <IconButton
+                      aria-label="Adicionar à wishlist"
+                      sx={{
+                        p: 1,
+                        '&:hover': {
+                          transform: 'scale(1.05)',
+                          '& svg': { fill: '#344E41' },
+                        },
+                        flexShrink: 0, 
+                      }}
+                    >
+                      <svg
+                        width="40"
+                        height="40"
+                        fill="none"
+                        stroke="#344E41"
+                        strokeWidth={2.2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                        />
+                      </svg>
+                    </IconButton>
+                  </Box>
+
+                  <Box
                     sx={{
-                      p: 1,
+                      maxHeight: 400,
+                      overflowY: 'auto',
+                      mb: 1.5,
+                      pr: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontSize: { xs: '1.05rem', sm: '1.12rem' },
+                        color: 'black',
+                        lineHeight: 1.7,
+                      }}
+                    >
+                      {product.description}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Preço + rating */}
+                <Box>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      flexWrap: 'wrap', 
+                    }}
+                  >
+                    <Typography
+                      variant="h3"
+                      sx={{
+                        fontSize: {
+                          xs: '2rem',
+                          sm: '2.25rem',
+                          lg: '2.5rem',
+                        },
+                        fontWeight: 'bold',
+                        color: 'black',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0, 
+                      }}
+                    >
+                      {Number(product.price).toFixed(2)} €
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        flexWrap: 'wrap',
+                        flexGrow: 1,
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', gap: 0.25 }}>
+                        {renderStars(product.avg_score)}
+                      </Box>
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          fontSize: {
+                            xs: '1rem',
+                            sm: '1.1rem',
+                          },
+                          fontWeight: 500,
+                          color: '#3A5A40',
+                        }}
+                      >
+                        {reviewCount === 0
+                          ? 'Sem avaliações'
+                          : `(${reviewCount} avaliaç${
+                              reviewCount > 1 ? 'ões' : 'ão'
+                            })`}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* Botões */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    gap: 2,
+                    width: '100%',
+                    alignItems: 'center',
+                    justifyContent: { xs: 'center', sm: 'flex-start' }
+                  }}
+                >
+                  <Button
+                    variant="contained"
+                    sx={{
+                      width: { xs: '100%', sm: 'auto' },
+                      minWidth: 160,
+                      bgcolor: '#344E41',
+                      color: 'white',
+                      p: { xs: '10px 20px', sm: '14px 28px' },
+                      borderRadius: '12px',
+                      fontWeight: 'bold',
+                      fontSize: { xs: '0.98rem', sm: '1.05rem' },
                       '&:hover': {
-                        transform: 'scale(1.1)',
-                        '& svg': { fill: '#344E41' },
+                        bgcolor: '#A3B18A',
+                        color: 'black',
                       },
+                      gap: 1.5,
+                      boxShadow:
+                        '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
                     }}
                   >
                     <svg
-                      width="48"
-                      height="48"
+                      width="24"
+                      height="24"
                       fill="none"
-                      stroke="#344E41"
-                      strokeWidth={2.5}
+                      stroke="currentColor"
+                      strokeWidth={2}
                       viewBox="0 0 24 24"
                     >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                       />
                     </svg>
-                  </IconButton>
-                </Box>
-                <Box
-                  sx={{
-                  height: 360, // fixed height, matches scroll threshold
-                  overflowY: 'auto',
-                  mb: 1.5,
-                }}
-                >
-                  <Typography
-                    variant="body2"
+                    Comprar
+                  </Button>
+                  <Button
+                    variant="contained"
                     sx={{
-                      fontSize: { xs: '1.1rem', sm: '1.18rem' },
-                      color: 'black',
-                      lineHeight: 1.65,
-                      pr: 1,
-                    }}
-                  >
-                    {product.description}
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Box 2: Price + Ratings */}
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 0 }}>
-                  <Typography
-                    variant="h3"
-                    sx={{
-                      fontSize: { xs: '2rem', sm: '2.25rem', lg: '2.75rem' },
+                      width: { xs: '100%', sm: 'auto' }, 
+                      bgcolor: '#588157',
+                      color: 'white',
+                      ml: { sm: 2 },
+                      p: { xs: '10px 20px', sm: '14px 28px' },
+                      borderRadius: '12px',
                       fontWeight: 'bold',
-                      color: 'black',
-                      whiteSpace: 'nowrap',
+                      fontSize: { xs: '0.98rem', sm: '1.05rem' },
+                      '&:hover': {
+                        bgcolor: '#A3B18A',
+                        color: 'black',
+                      },
+                      gap: 1.5,
+                      boxShadow:
+                        '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
                     }}
                   >
-                    {Number(product.price).toFixed(2)} €
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      {renderStars(product.avg_score)}
-                    </Box>
-                    <Typography variant="body1" sx={{ fontSize: { xs: '1.15rem', sm: '1.22rem' }, fontWeight: '500', color: '#3A5A40' }}>
-                      {reviewCount === 0
-                        ? 'Sem avaliações'
-                        : `(${reviewCount} avaliaç${reviewCount > 1 ? 'ões' : 'ão'})`}
-                    </Typography>
-                  </Box>
+                    <svg
+                      width="24"
+                      height="24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                      />
+                    </svg>
+                    Falar com o Vendedor
+                  </Button>
                 </Box>
               </Box>
-
-              {/* Box 3: Actions */}
-              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center', gap: 2 }}>
-                <Button
-                  variant="contained"
-                  sx={{
-                    flex: 1,
-                    bgcolor: '#344E41',
-                    color: 'white',
-                    p: { xs: '12px 24px', sm: '16px 32px' },
-                    borderRadius: '12px',
-                    fontWeight: 'bold',
-                    fontSize: { xs: '1rem', sm: '1.125rem' },
-                    '&:hover': {
-                      bgcolor: '#A3B18A',
-                      color: 'black',
-                    },
-                    gap: 1.5,
-                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
-                  }}
-                >
-                  <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  Comprar
-                </Button>
-                <Button
-                  variant="contained"
-                  sx={{
-                    flex: 1,
-                    bgcolor: '#588157',
-                    color: 'white',
-                    p: { xs: '12px 24px', sm: '16px 32px' },
-                    borderRadius: '12px',
-                    fontWeight: 'bold',
-                    fontSize: { xs: '1rem', sm: '1.125rem' },
-                    '&:hover': {
-                      bgcolor: '#A3B18A',
-                      color: 'black',
-                    },
-                    gap: 1.5,
-                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
-                  }}
-                >
-                  <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  Falar com o Vendedor
-                </Button>
-              </Box>
-            </Box>
+            </Grid>
           </Grid>
-        </Grid>
 
-        {/* New box for storytelling below the main grid */}
-        <Box
-          sx={{
-            bgcolor: '#F5F5F5',
-            borderRadius: '16px',
-            mt: 4,
-            p: { xs: 2, sm: 3 },
-          }}
-        >
-          <Typography
-            variant="h5"
+          {/* Storytelling */}
+          <Box
             sx={{
-              fontWeight: 'bold',
-              color: '#344E41',
-              mb: 1,
-              fontSize: { xs: '1.25rem', sm: '1.5rem' },
+              bgcolor: '#F5F5F5',
+              borderRadius: '16px',
+              mt: 4,
+              p: { xs: 2, sm: 3 },
             }}
           >
-            História do Produto
-          </Typography>
-          <Typography
-            variant="body1"
-            sx={{
-              fontSize: { xs: '1.1rem', sm: '1.18rem' },
-              fontWeight: '600',
-              color: 'black',
-              whiteSpace: 'pre-line',
-            }}
-          >
-            {product.storytelling}
-          </Typography>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 'bold',
+                color: '#344E41',
+                mb: 1,
+                fontSize: { xs: '1.2rem', sm: '1.35rem' },
+              }}
+            >
+              História do Produto
+            </Typography>
+            <Typography
+              variant="body1"
+              sx={{
+                fontSize: { xs: '1.02rem', sm: '1.1rem' },
+                fontWeight: 600,
+                color: 'black',
+                whiteSpace: 'pre-line',
+                lineHeight: 1.7,
+              }}
+            >
+              {product.storytelling}
+            </Typography>
+          </Box>
         </Box>
-      </Box>
-      
-      {/* Divider */}
-      <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
 
+        <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
+      </Box>
     </Box>
   );
 }
@@ -393,38 +494,58 @@ export function ProductSpecifications() {
 
   return (
     <>
-      {/* Additional Information Sections */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, px: { xs: 2, sm: 3 }, mx: { xs: 1, sm: 2 } }}>
+      <Box
+        sx={{
+          maxWidth: 1200,
+          mx: 'auto',
+          px: { xs: 1.5, sm: 3, md: 0 },
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1.5,
+          pb: 4,
+        }}
+      >
         {product.specifications.map((spec, index) => (
-          <Box key={index} sx={{ bgcolor: '#DAD7CD', borderRadius: '16px', p: { xs: 3, sm: 4 } }}>
-            <Typography 
-              variant="h4" 
-              sx={{ 
-                fontSize: { xs: '1.5rem', sm: '2rem' }, 
-                fontWeight: 'bold', 
-                color: 'black', 
-                mb: 1.5
-              }}
-            >
-              {spec.title}
-            </Typography>
-            <Typography
-              variant="body1"
+          <React.Fragment key={index}>
+            <Box
               sx={{
-                color: 'black',
-                fontSize: { xs: '1.18rem', sm: '1.25rem' },
-                lineHeight: 1.6,
-                whiteSpace: 'pre-line',
-                pl: 2,
+                bgcolor: '#E4E1D6',
+                borderRadius: '16px',
+                p: { xs: 2.5, sm: 3, md: 3.5 },
               }}
             >
-              {spec.description}
-            </Typography>
-          </Box>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontSize: { xs: '1.3rem', sm: '1.6rem' },
+                  fontWeight: 'bold',
+                  color: 'black',
+                  mb: 1.25,
+                }}
+              >
+                {spec.title}
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: 'black',
+                  fontSize: { xs: '1.05rem', sm: '1.12rem' },
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-line',
+                  pl: { xs: 1, sm: 2 },
+                }}
+              >
+                {spec.description}
+              </Typography>
+            </Box>
+
+            {index < product.specifications.length - 1 && (
+              <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
+            )}
+          </React.Fragment>
         ))}
       </Box>
 
-      {/* Divider */}
       <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
     </>
   );

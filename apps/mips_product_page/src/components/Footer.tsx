@@ -62,7 +62,7 @@ export default function Footer() {
         mt: 'auto',
         width: '100%',
         bgcolor: '#DAD7CD',
-        borderTop: '1px solid rgba(52, 78, 65, 0.3)',
+        
         pt: { xs: 7, md: 9 },
         pb: { xs: 6, md: 8 },
       }}
@@ -192,16 +192,8 @@ export default function Footer() {
               </Link>
             </Stack>
           </Grid>
-        </Grid>
 
-        {/* Divider */}
-        <Box
-          sx={{
-            borderTop: '1px solid rgba(52, 78, 65, 0.35)',
-            width: '100%',
-            mb: 3,
-          }}
-        />
+        </Grid>
 
         {/* Copyright */}
         <Box
