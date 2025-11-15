@@ -2,19 +2,19 @@ import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton'; // Para o botão wishlist
-import { useState } from 'react';
+import IconButton from '@mui/material/IconButton';
+import CircularProgress from '@mui/material/CircularProgress';
+import { useState, useEffect } from 'react';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
+import { getJumpsellerApi, JumpsellerProduct } from '../services/jumpsellerApi';
 
 // --- DADOS FALSOS (Substituindo o Prisma) ---
 const dummyProduct = {
   id: 3,
   title: 'Galo de Barcelos',
   storytelling: 'Símbolo lendário de fé, sorte e perseverança, o Galo de Barcelos é uma das expressões mais emblemáticas da cultura popular portuguesa. Inspirado na famosa lenda do peregrino injustamente acusado, este galo ergue-se como um emblema de justiça e esperança. Cada detalhe do seu design reflete séculos de tradição passada entre gerações de artesãos que mantêm viva a alma do folclore português. Ao adquirir esta peça, apoia diretamente o trabalho manual local e contribui para a preservação das nossas raízes culturais.',
-  
   description: 'Este Galo de Barcelos é cuidadosamente moldado em cerâmica e pintado à mão por artesãos experientes de Barcelos, norte de Portugal. O processo de produção combina técnicas tradicionais com um toque moderno, garantindo uma peça vibrante, cheia de cor e caráter. Cada exemplar é único — pequenas variações na pintura e na textura conferem-lhe autenticidade e charme artesanal. Representando a célebre lenda em que um galo milagrosamente prova a inocência de um viajante, esta escultura é mais do que um objeto decorativo: é um símbolo de fé, justiça e boa sorte. Ideal para oferecer ou decorar espaços que valorizam cultura e identidade portuguesa. ',
-  
   price: 29.99,
   avg_score: 4.5,
   reviewCount: 3,
@@ -40,24 +40,98 @@ const dummyProduct = {
   ],
 };
 
+// Map Jumpseller product to your dummy product format
+const mapJumpsellerProduct = (jumpsellerProduct: any) => {
+  console.log('Mapping Jumpseller product:', jumpsellerProduct);
+  
+  // Extract the actual product from the nested structure
+  const product = jumpsellerProduct.product || jumpsellerProduct;
+  
+  return {
+    id: product.id,
+    title: product.name || 'Produto sem nome',
+    storytelling: product.description || 'História do produto não disponível.',
+    description: product.description || 'Descrição não disponível.',
+    price: typeof product.price === 'number' ? product.price : parseFloat(product.price || '0'),
+    avg_score: 4.5,
+    reviewCount: 0,
+    photos: product.images && product.images.length > 0 
+      ? product.images.map((img: any) => ({
+          photo_url: img.url,
+          alt_text: img.description || product.name,
+        }))
+      : [{ photo_url: '/galo.png', alt_text: product.name }],
+    mainPhoto: {
+      photo_url: product.images?.[0]?.url || '/galo.png',
+      alt_text: product.name,
+    },
+    specifications: [
+      { title: 'SKU', description: product.sku || 'N/A' },
+      { title: 'Stock', description: `${product.stock || 0} unidades` },
+      { title: 'Status', description: product.status || 'N/A' },
+      { title: 'Peso', description: product.weight ? `${product.weight} kg` : 'N/A' },
+      { title: 'Moeda', description: product.currency || 'EUR' },
+      ...(product.brand ? [{ title: 'Marca', description: product.brand }] : []),
+      ...(product.barcode ? [{ title: 'Código de Barras', description: product.barcode }] : []),
+    ],
+  };
+};
 
-
-// --- COMPONENTE TRADUZIDO ---
-
-export default function ProductDetail() {
-  const product = dummyProduct; // Usamos o produto falso
-  const photos = product.photos || [];
+export default function ProductDetail({ productId }: { productId?: number }) {
+  const [product, setProduct] = useState(dummyProduct);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
-  const { reviewCount } = product;
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Função para renderizar estrelas (copiada e adaptada)
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log('Fetching product...');
+        const api = getJumpsellerApi();
+        
+        if (productId) {
+          console.log(`Fetching product with ID: ${productId}`);
+          const jumpsellerProduct = await api.getProduct(productId);
+          const mappedProduct = mapJumpsellerProduct(jumpsellerProduct);
+          setProduct(mappedProduct);
+          console.log('Product loaded successfully:', mappedProduct.title);
+        } else {
+          console.log('Fetching first product from list...');
+          const products = await api.getProducts(1, 1);
+          console.log('Products received:', products);
+          
+          if (products && products.length > 0) {
+            const mappedProduct = mapJumpsellerProduct(products[0]);
+            setProduct(mappedProduct);
+            console.log('First product loaded successfully:', mappedProduct.title);
+          } else {
+            console.warn('No products found in response, using dummy data');
+            setProduct(dummyProduct);
+          }
+        }
+      } catch (err) {
+        console.error('Error in fetchProduct:', err);
+        setError(err as Error);
+        // Fallback to dummy data on error
+        setProduct(dummyProduct);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [productId]);
+
+  // Função para renderizar estrelas
   const renderStars = (score: number) => {
     return Array.from({ length: 5 }, (_, i) => {
       const starNumber = i + 1;
       const isFilled = score >= starNumber;
-      // Não precisamos de meia estrela para este exemplo, simplifica
       return (
         <svg
           key={i}
@@ -66,7 +140,7 @@ export default function ProductDetail() {
           } stroke-[#3A5A40] stroke-2`}
           viewBox="0 0 24 24"
           xmlns="http://www.w3.org/2000/svg"
-          style={{ width: 40, height: 40 }} // Tamanho fixo para MUI
+          style={{ width: 40, height: 40 }}
         >
           <path
             strokeLinecap="round"
@@ -78,8 +152,33 @@ export default function ProductDetail() {
     });
   };
 
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px', flexDirection: 'column', gap: 2 }}>
+        <CircularProgress sx={{ color: '#344E41' }} />
+        <Typography sx={{ color: '#344E41' }}>A carregar produto...</Typography>
+      </Box>
+    );
+  }
+
+  const photos = product.photos || [];
+
   return (
-    <Box sx={{ p: { xs: 1, sm: 2 } }}> {/* Padding geral */}
+    <Box sx={{ p: { xs: 1, sm: 2 } }}>
+      {error && (
+        <Box sx={{ bgcolor: '#ffebee', p: 2, borderRadius: 2, mb: 2 }}>
+          <Typography color="error" sx={{ fontWeight: 'bold', mb: 1 }}>
+            Aviso: Não foi possível carregar o produto.
+          </Typography>
+          <Typography variant="body2" color="error">
+            Erro: {error.message}
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            Mostrando dados de exemplo. Verifique se o backend está a funcionar.
+          </Typography>
+        </Box>
+      )}
+      
       {/* Main Product Card */}
       <Box
         sx={{
@@ -103,7 +202,7 @@ export default function ProductDetail() {
           <Grid
             item
             xs={12}
-            md={4} // 1/3 of horizontal area on md+ screens
+            md={4}
             sx={{
               display: 'flex',
               justifyContent: 'center',
@@ -134,24 +233,26 @@ export default function ProductDetail() {
                   bgcolor: 'white',
                   borderRadius: '8px',
                   width: '100%',
-                  flex: 1,         // allow image area to grow within the taller container
-                  minHeight: 0,    // enable proper flexbox shrinking on some browsers
+                  flex: 1,
+                  minHeight: 0,
                   overflow: 'hidden',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                {/* imagem principal (selecionada) */}
                 <Box
                   component="img"
                   src={photos[selectedPhotoIndex]?.photo_url || product.mainPhoto.photo_url}
                   alt={photos[selectedPhotoIndex]?.alt_text || product.title}
                   sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  onError={(e) => {
+                    console.error('Image failed to load:', e.currentTarget.src);
+                    e.currentTarget.src = '/galo.png'; // Fallback image
+                  }}
                 />
               </Box>
 
-              {/* Miniaturas */}
               {photos.length > 1 && (
                 <Box sx={{ display: 'flex', gap: 1.5, mt: 1 }}>
                   {photos.map((p, i) => (
@@ -171,10 +272,18 @@ export default function ProductDetail() {
                         justifyContent: 'center',
                         boxShadow: i === selectedPhotoIndex
                           ? '0 0 0 4px white, 0 0 12px 2px rgba(255,255,255,0.7)'
-                          : 'none', // white glow for selected
+                          : 'none',
                       }}
                     >
-                      <Box component="img" src={p.photo_url} alt={p.alt_text} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <Box 
+                        component="img" 
+                        src={p.photo_url} 
+                        alt={p.alt_text} 
+                        sx={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        onError={(e) => {
+                          e.currentTarget.src = '/galo.png';
+                        }}
+                      />
                     </Box>
                   ))}
                 </Box>
@@ -186,7 +295,7 @@ export default function ProductDetail() {
           <Grid
             item
             xs={12}
-            md={8} // 2/3 of horizontal area on md+ screens
+            md={8}
             sx={{
               minWidth: 0,
               display: 'flex',
@@ -200,13 +309,12 @@ export default function ProductDetail() {
               display: 'flex',
               flexDirection: 'column',
               height: '100%',
-              justifyContent: 'flex-end', // push content to bottom
+              justifyContent: 'flex-end',
               gap: 3,
               flex: 1,
             }}>
-              {/* Box 1: Title + Description + Storytelling */}
+              {/* Box 1: Title + Description */}
               <Box sx={{ flexGrow: 1 }}>
-                {/* Title and Wishlist */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
                   <Typography
                     variant="h3"
@@ -230,28 +338,17 @@ export default function ProductDetail() {
                       },
                     }}
                   >
-                    <svg
-                      width="48"
-                      height="48"
-                      fill="none"
-                      stroke="#344E41"
-                      strokeWidth={2.5}
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                      />
+                    <svg width="32" height="32" fill="none" stroke="#344E41" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                     </svg>
                   </IconButton>
                 </Box>
                 <Box
                   sx={{
-                  height: 360, // fixed height, matches scroll threshold
-                  overflowY: 'auto',
-                  mb: 1.5,
-                }}
+                    height: 360,
+                    overflowY: 'auto',
+                    mb: 1.5,
+                  }}
                 >
                   <Typography
                     variant="body2"
@@ -279,16 +376,12 @@ export default function ProductDetail() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {Number(product.price).toFixed(2)} €
+                    {product.price.toFixed(2)} €
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      {renderStars(product.avg_score)}
-                    </Box>
-                    <Typography variant="body1" sx={{ fontSize: { xs: '1.15rem', sm: '1.22rem' }, fontWeight: '500', color: '#3A5A40' }}>
-                      {reviewCount === 0
-                        ? 'Sem avaliações'
-                        : `(${reviewCount} avaliaç${reviewCount > 1 ? 'ões' : 'ão'})`}
+                    {renderStars(product.avg_score)}
+                    <Typography variant="body2" sx={{ color: '#666' }}>
+                      ({product.reviewCount})
                     </Typography>
                   </Box>
                 </Box>
@@ -347,7 +440,7 @@ export default function ProductDetail() {
           </Grid>
         </Grid>
 
-        {/* New box for storytelling below the main grid */}
+        {/* Storytelling box */}
         <Box
           sx={{
             bgcolor: '#F5F5F5',
@@ -383,7 +476,6 @@ export default function ProductDetail() {
       
       {/* Divider */}
       <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
-
     </Box>
   );
 }
