@@ -2,13 +2,14 @@
 FROM node:25-alpine3.21
 
 # Install pnpm
-RUN npm install -g pnpm
+RUN npm install -g pnpm@8
 
 # Set workdir
 WORKDIR /app
 
 # Copy pnpm files
 COPY package.json pnpm-lock.yaml ./
+COPY prisma ./prisma
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
