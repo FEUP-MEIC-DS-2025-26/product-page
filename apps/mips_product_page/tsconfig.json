@@ -22,5 +22,5 @@
       "*": ["./@mf-types/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../../prisma/seed.ts"]
 }
