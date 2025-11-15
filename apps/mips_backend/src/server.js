@@ -88,6 +88,36 @@ app.get('/api/products/:id', async (req, res) => {
   }
 });
 
+app.get('/api/products/sku/:sku', async (req, res) => {
+  try {
+    const { sku } = req.params;
+    console.log(`Fetching product by SKU: ${sku}`);
+    
+    // Get all products and filter by SKU
+    const response = await jumpsellerClient.get('/products.json', {
+      params: { limit: 100 }
+    });
+    
+    const product = response.data.find((p) => p.product.sku === sku);
+    
+    if (product) {
+      console.log('Product found:', product.product.name);
+      res.json(product);
+    } else {
+      res.status(404).json({
+        error: 'Product not found',
+        details: `No product found with SKU: ${sku}`,
+      });
+    }
+  } catch (error) {
+    console.error(`Error fetching product by SKU ${req.params.sku}:`, error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch product',
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
 app.get('/api/orders', async (req, res) => {
   try {
     const { page = 1, limit = 50 } = req.query;

@@ -7,51 +7,41 @@ import CircularProgress from '@mui/material/CircularProgress';
 import { useState, useEffect } from 'react';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { getJumpsellerApi, JumpsellerProduct } from '../services/jumpsellerApi';
+import { getJumpsellerApi } from '../services/jumpsellerApi';
 
-// --- DADOS FALSOS (Substituindo o Prisma) ---
-const dummyProduct = {
-  id: 3,
-  title: 'Galo de Barcelos',
-  storytelling: 'Símbolo lendário de fé, sorte e perseverança, o Galo de Barcelos é uma das expressões mais emblemáticas da cultura popular portuguesa. Inspirado na famosa lenda do peregrino injustamente acusado, este galo ergue-se como um emblema de justiça e esperança. Cada detalhe do seu design reflete séculos de tradição passada entre gerações de artesãos que mantêm viva a alma do folclore português. Ao adquirir esta peça, apoia diretamente o trabalho manual local e contribui para a preservação das nossas raízes culturais.',
-  description: 'Este Galo de Barcelos é cuidadosamente moldado em cerâmica e pintado à mão por artesãos experientes de Barcelos, norte de Portugal. O processo de produção combina técnicas tradicionais com um toque moderno, garantindo uma peça vibrante, cheia de cor e caráter. Cada exemplar é único — pequenas variações na pintura e na textura conferem-lhe autenticidade e charme artesanal. Representando a célebre lenda em que um galo milagrosamente prova a inocência de um viajante, esta escultura é mais do que um objeto decorativo: é um símbolo de fé, justiça e boa sorte. Ideal para oferecer ou decorar espaços que valorizam cultura e identidade portuguesa. ',
-  price: 29.99,
-  avg_score: 4.5,
-  reviewCount: 3,
-  photos: [
-    { photo_url: '/galo1.png', alt_text: 'Galo de Barcelos1' },
-    { photo_url: '/galo2.png', alt_text: 'Galo de Barcelos2' },
-  ],
-  mainPhoto: {
-    photo_url: '/galo.png',
-    alt_text: 'Galo de Barcelos',
-  },
-  specifications: [
-    { title: 'Material', description: 'Cerâmica pintada à mão' },
-    { title: 'Dimensões', description: '25cm x 15cm' },
-    { title: 'Peso', description: '0.8 kg' },
-    { title: 'Origem', description: 'Barcelos, Portugal' },
-    { title: 'Ano de produção', description: '2025' },
-    { title: 'Acabamento', description: 'Verniz protetor com brilho' },
-    { title: 'Cuidados', description: 'Limpar com pano seco; evitar produtos abrasivos' },
-    { title: 'Uso recomendado', description: 'Decoração interior' },
-    { title: 'Cor predominante', description: 'Preto com detalhes multicoloridos' },
-    { title: 'Certificação', description: 'Produto artesanal certificado (Licença IPHAN)' },
-  ],
+// Helper function to strip HTML tags
+const stripHtmlTags = (html: string): string => {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent || '';
 };
 
-// Map Jumpseller product to your dummy product format
+// Map Jumpseller product to your format
 const mapJumpsellerProduct = (jumpsellerProduct: any) => {
   console.log('Mapping Jumpseller product:', jumpsellerProduct);
   
-  // Extract the actual product from the nested structure
   const product = jumpsellerProduct.product || jumpsellerProduct;
+  
+  // Find "Historia" field for storytelling (using label instead of name)
+  const historiaField = product.fields?.find((f: any) => f.label === 'Historia');
+  const storytelling = historiaField?.value 
+    ? stripHtmlTags(historiaField.value) 
+    : 'História do produto não disponível.';
+  
+  // Convert custom fields to specifications, excluding "Historia"
+  const customFieldsSpecs = product.fields
+    ? product.fields
+        .filter((field: any) => field.label !== 'Historia')
+        .map((field: any) => ({
+          title: field.label,  // This uses the label (e.g., "Certificação")
+          description: stripHtmlTags(field.value),  // This uses the value (e.g., "Produto artesanal...")
+        }))
+    : [];
   
   return {
     id: product.id,
     title: product.name || 'Produto sem nome',
-    storytelling: product.description || 'História do produto não disponível.',
-    description: product.description || 'Descrição não disponível.',
+    storytelling: storytelling,
+    description: stripHtmlTags(product.description || 'Descrição não disponível.'),
     price: typeof product.price === 'number' ? product.price : parseFloat(product.price || '0'),
     avg_score: 4.5,
     reviewCount: 0,
@@ -65,20 +55,17 @@ const mapJumpsellerProduct = (jumpsellerProduct: any) => {
       photo_url: product.images?.[0]?.url || '/galo.png',
       alt_text: product.name,
     },
-    specifications: [
-      { title: 'SKU', description: product.sku || 'N/A' },
-      { title: 'Stock', description: `${product.stock || 0} unidades` },
-      { title: 'Status', description: product.status || 'N/A' },
-      { title: 'Peso', description: product.weight ? `${product.weight} kg` : 'N/A' },
-      { title: 'Moeda', description: product.currency || 'EUR' },
-      ...(product.brand ? [{ title: 'Marca', description: product.brand }] : []),
-      ...(product.barcode ? [{ title: 'Código de Barras', description: product.barcode }] : []),
-    ],
+    specifications: customFieldsSpecs,
   };
 };
 
-export default function ProductDetail({ productId }: { productId?: number }) {
-  const [product, setProduct] = useState(dummyProduct);
+interface ProductDetailProps {
+  productId?: number;
+  sku?: string;
+}
+
+export default function ProductDetail({ productId, sku }: ProductDetailProps) {
+  const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
@@ -94,13 +81,22 @@ export default function ProductDetail({ productId }: { productId?: number }) {
         console.log('Fetching product...');
         const api = getJumpsellerApi();
         
-        if (productId) {
+        if (sku) {
+          // Fetch by SKU
+          console.log(`Fetching product with SKU: ${sku}`);
+          const jumpsellerProduct = await api.getProductBySKU(sku);
+          const mappedProduct = mapJumpsellerProduct({ product: jumpsellerProduct });
+          setProduct(mappedProduct);
+          console.log('Product loaded successfully by SKU:', mappedProduct.title);
+        } else if (productId) {
+          // Fetch by ID
           console.log(`Fetching product with ID: ${productId}`);
           const jumpsellerProduct = await api.getProduct(productId);
-          const mappedProduct = mapJumpsellerProduct(jumpsellerProduct);
+          const mappedProduct = mapJumpsellerProduct({ product: jumpsellerProduct });
           setProduct(mappedProduct);
-          console.log('Product loaded successfully:', mappedProduct.title);
+          console.log('Product loaded successfully by ID:', mappedProduct.title);
         } else {
+          // Fetch first product
           console.log('Fetching first product from list...');
           const products = await api.getProducts(1, 1);
           console.log('Products received:', products);
@@ -110,24 +106,20 @@ export default function ProductDetail({ productId }: { productId?: number }) {
             setProduct(mappedProduct);
             console.log('First product loaded successfully:', mappedProduct.title);
           } else {
-            console.warn('No products found in response, using dummy data');
-            setProduct(dummyProduct);
+            throw new Error('Nenhum produto encontrado');
           }
         }
       } catch (err) {
         console.error('Error in fetchProduct:', err);
         setError(err as Error);
-        // Fallback to dummy data on error
-        setProduct(dummyProduct);
       } finally {
         setLoading(false);
       }
     };
 
     fetchProduct();
-  }, [productId]);
+  }, [productId, sku]);
 
-  // Função para renderizar estrelas
   const renderStars = (score: number) => {
     return Array.from({ length: 5 }, (_, i) => {
       const starNumber = i + 1;
@@ -161,25 +153,23 @@ export default function ProductDetail({ productId }: { productId?: number }) {
     );
   }
 
+  if (error || !product) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px', flexDirection: 'column', gap: 2 }}>
+        <Typography color="error" sx={{ fontWeight: 'bold' }}>
+          Erro ao carregar o produto
+        </Typography>
+        <Typography variant="body2" color="error">
+          {error?.message || 'Produto não encontrado'}
+        </Typography>
+      </Box>
+    );
+  }
+
   const photos = product.photos || [];
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 } }}>
-      {error && (
-        <Box sx={{ bgcolor: '#ffebee', p: 2, borderRadius: 2, mb: 2 }}>
-          <Typography color="error" sx={{ fontWeight: 'bold', mb: 1 }}>
-            Aviso: Não foi possível carregar o produto.
-          </Typography>
-          <Typography variant="body2" color="error">
-            Erro: {error.message}
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            Mostrando dados de exemplo. Verifique se o backend está a funcionar.
-          </Typography>
-        </Box>
-      )}
-      
-      {/* Main Product Card */}
       <Box
         sx={{
           bgcolor: '#DAD7CD',
@@ -188,7 +178,6 @@ export default function ProductDetail({ productId }: { productId?: number }) {
           boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
         }}
       >
-        {/* Main grid: left and right areas */}
         <Grid
           container
           spacing={{ xs: 3, lg: 4 }}
@@ -198,7 +187,6 @@ export default function ProductDetail({ productId }: { productId?: number }) {
             alignItems: 'stretch',
           }}
         >
-          {/* Left: Product Image */}
           <Grid
             item
             xs={12}
@@ -248,7 +236,7 @@ export default function ProductDetail({ productId }: { productId?: number }) {
                   sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
                   onError={(e) => {
                     console.error('Image failed to load:', e.currentTarget.src);
-                    e.currentTarget.src = '/galo.png'; // Fallback image
+                    e.currentTarget.src = '/galo.png';
                   }}
                 />
               </Box>
@@ -291,7 +279,6 @@ export default function ProductDetail({ productId }: { productId?: number }) {
             </Box>
           </Grid>
 
-          {/* Right: Product Info */}
           <Grid
             item
             xs={12}
@@ -313,7 +300,6 @@ export default function ProductDetail({ productId }: { productId?: number }) {
               gap: 3,
               flex: 1,
             }}>
-              {/* Box 1: Title + Description */}
               <Box sx={{ flexGrow: 1 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
                   <Typography
@@ -364,7 +350,6 @@ export default function ProductDetail({ productId }: { productId?: number }) {
                 </Box>
               </Box>
 
-              {/* Box 2: Price + Ratings */}
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 0 }}>
                   <Typography
@@ -387,7 +372,6 @@ export default function ProductDetail({ productId }: { productId?: number }) {
                 </Box>
               </Box>
 
-              {/* Box 3: Actions */}
               <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center', gap: 2 }}>
                 <Button
                   variant="contained"
@@ -440,7 +424,6 @@ export default function ProductDetail({ productId }: { productId?: number }) {
           </Grid>
         </Grid>
 
-        {/* Storytelling box */}
         <Box
           sx={{
             bgcolor: '#F5F5F5',
@@ -474,20 +457,20 @@ export default function ProductDetail({ productId }: { productId?: number }) {
         </Box>
       </Box>
       
-      {/* Divider */}
       <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
     </Box>
   );
 }
 
-export function ProductSpecifications() {
-  const product = dummyProduct;
+export function ProductSpecifications({ specifications }: { specifications?: Array<{ title: string; description: string }> }) {
+  if (!specifications || specifications.length === 0) {
+    return null;
+  }
 
   return (
     <>
-      {/* Additional Information Sections */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, px: { xs: 2, sm: 3 }, mx: { xs: 1, sm: 2 } }}>
-        {product.specifications.map((spec, index) => (
+        {specifications.map((spec, index) => (
           <Box key={index} sx={{ bgcolor: '#DAD7CD', borderRadius: '16px', p: { xs: 3, sm: 4 } }}>
             <Typography 
               variant="h4" 
@@ -516,7 +499,6 @@ export function ProductSpecifications() {
         ))}
       </Box>
 
-      {/* Divider */}
       <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
     </>
   );

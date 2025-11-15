@@ -73,6 +73,16 @@ class JumpsellerApiClient {
     }
   }
 
+  async getProductBySKU(sku: string): Promise<JumpsellerProduct> {
+    try {
+      const response = await this.client.get(`/products/sku/${sku}`);
+      return response.data.product;
+    } catch (error) {
+      console.error(`Error fetching product by SKU ${sku}:`, error);
+      throw error;
+    }
+  }
+
   async getOrders(page = 1, limit = 50): Promise<JumpsellerOrder[]> {
     try {
       const response = await this.client.get('/orders', {
