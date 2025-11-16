@@ -2,15 +2,17 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProductDetail from '../components/ProductDetail';
-import { getJumpsellerApi } from '../services/jumpsellerApi';
+import { getJumpsellerApi } from '../services/jumpsellerApi'; // Import the original path
 
-// --- Mocks Setup ---
+// --- Mock Setup ---
 
-// 1. Mock the Jumpseller API module
-// We'll create mock functions that we can reference in our tests
+// 1. Create variables to hold the mock functions
+// This allows us to reference them inside tests to check if they were called
 const mockGetProduct = jest.fn();
-const mockGetProductReviews = jest.fn(() => Promise.resolve([])); // Default success for reviews
+const mockGetProductReviews = jest.fn();
 
+// 2. Mock the entire module
+// This replaces the actual 'getJumpsellerApi' with our mock version
 jest.mock('../services/jumpsellerApi', () => ({
   getJumpsellerApi: jest.fn(() => ({
     getProduct: mockGetProduct,
@@ -18,7 +20,7 @@ jest.mock('../services/jumpsellerApi', () => ({
   })),
 }));
 
-// 2. Mock window.matchMedia for MUI
+// 3. Mock window.matchMedia (for MUI's useMediaQuery)
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: any) => ({
@@ -33,153 +35,175 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
-// 3. Mock Data
-const mockProduct = {
-  id: 1,
-  title: 'Galo de Barcelos',
-  storytelling: 'História linda do produto...',
-  description: 'Descrição do produto para testar.',
-  price: 25,
+// 4. Mock global.fetch (for the database fallback)
+global.fetch = jest.fn();
+const mockFetch = global.fetch as jest.Mock;
+
+// 5. Define mock data
+const mockApiProduct = {
+  id: 32614736,
+  name: 'Galo de Barcelos (API)',
+  description: 'A beautiful rooster from the API.',
+  price: 30.0,
+  images: [
+    { url: 'http://api.com/image1.jpg', description: 'API image 1' },
+    { url: 'http://api.com/image2.jpg', description: 'API image 2' },
+  ],
+  fields: [{ label: 'Material', value: 'Ceramic' }],
+};
+
+const mockDbProduct = {
+  id: 123,
+  title: 'Galo de Barcelos (DB)',
+  storytelling: 'Database storytelling...',
+  description: 'Database description...',
+  price: 25.99,
   avg_score: 4.5,
-  reviewCount: 3,
+  reviewCount: 10,
   mainPhoto: {
-    photo_url: 'https://example.com/main.jpg',
-    alt_text: 'Foto principal',
+    photo_url: 'https://db.com/main.jpg',
+    alt_text: 'DB main photo',
   },
   photos: [
     {
-      photo_url: 'https://example.com/main.jpg',
-      alt_text: 'Foto principal',
+      photo_url: 'https://db.com/main.jpg',
+      alt_text: 'DB main photo',
     },
     {
-      photo_url: 'https://example.com/extra.jpg',
-      alt_text: 'Foto extra',
+      photo_url: 'https://db.com/extra.jpg',
+      alt_text: 'DB extra photo',
     },
   ],
-  specifications: null,
+  specifications: [{ title: 'Origin', description: 'Portugal' }],
 };
-
-// 4. Mock global fetch
-// We need to mock 'fetch' for the database fallback
-global.fetch = jest.fn();
 
 // --- Test Suite ---
 
 describe('ProductDetail', () => {
   beforeEach(() => {
-    // Reset all mocks before each test
+    // Reset all mock implementations and call counts before each test
     jest.clearAllMocks();
-    (global.fetch as jest.Mock).mockClear();
+    mockGetProduct.mockReset();
+    mockGetProductReviews.mockReset();
+    mockFetch.mockReset();
   });
 
-  test('mostra o texto de loading enquanto carrega o produto', async () => {
-    // Simulate the Jumpseller API failing and the database fetch being slow
-    mockGetProduct.mockRejectedValue(new Error('Jumpseller down'));
-    (global.fetch as jest.Mock).mockImplementation(() => 
-      new Promise(resolve => setTimeout(() => resolve({
-        ok: true,
-        json: () => Promise.resolve(mockProduct),
-      }), 100))
-    );
+  test('shows loading state initially', () => {
+    // Set up mocks to be pending
+    mockGetProduct.mockReturnValue(new Promise(() => {})); // Never resolves
+    mockFetch.mockReturnValue(new Promise(() => {})); // Never resolves
 
     render(<ProductDetail />);
 
-    // 1) Check for the correct loading text
-    // Using findBy queries waits for the element to appear
-    expect(await screen.findByText('A carregar Galo de Barcelos...')).toBeInTheDocument();
-
-    // 2) Wait until the product is loaded and the loading text disappears
-    await waitFor(() => {
-      expect(
-        screen.queryByText(/A carregar Galo de Barcelos.../i)
-      ).not.toBeInTheDocument();
-    });
-
-    // 3) Verify the product from the database is now shown
-    expect(await screen.findByText('Galo de Barcelos')).toBeInTheDocument();
-  });
-
-  test('renderiza título, descrição e preço quando o produto é carregado (via fallback)', async () => {
-    // Simulate Jumpseller API failure, but database success
-    mockGetProduct.mockRejectedValue(new Error('Mocked Jumpseller API failure'));
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockProduct),
-    });
-
-    render(<ProductDetail />);
-
-    // Use findBy* to wait for the async operations (Jumpseller fail + fetch success)
-    const title = await screen.findByRole('heading', {
-      name: /Galo de Barcelos/i,
-    });
-    expect(title).toBeInTheDocument();
-
-    // Check for other details
+    // Check for the correct loading text. 
+    // The regex /A carregar produto/i failed because the text is "A carregar Galo de Barcelos..."
     expect(
-      await screen.findByText(/Descrição do produto para testar./i)
+      screen.getByText('A carregar Galo de Barcelos...')
     ).toBeInTheDocument();
-    
-    expect(await screen.findByText('25.00 €')).toBeInTheDocument();
-    
-    expect(await screen.findByText(/\(3 avaliações\)/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+  });
+
+  test('loads product from Jumpseller API successfully (happy path)', async () => {
+    // Mock a successful API response
+    mockGetProduct.mockResolvedValue(mockApiProduct);
+    mockGetProductReviews.mockResolvedValue([]); // No reviews for simplicity
+
+    render(<ProductDetail />);
+
+    // Wait for the loading to be replaced by the product title
+    expect(await screen.findByText('Galo de Barcelos (API)')).toBeInTheDocument();
 
     // Check that the correct source is displayed
-    expect(await screen.findByText(/Fonte: Base de Dados/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fonte: Jumpseller API/i)).toBeInTheDocument();
+    
+    // Check that the database was NOT called
+    expect(mockFetch).not.toHaveBeenCalled();
+    
+    // Check that the API was called
+    expect(mockGetProduct).toHaveBeenCalledWith(32614736);
+  });
 
-    // Check that the correct API calls were made
+  test('falls back to database if Jumpseller API fails', async () => {
+    // 1. Mock Jumpseller API to fail
+    mockGetProduct.mockRejectedValue(new Error('Mocked Jumpseller API failure'));
+
+    // 2. Mock 'fetch' (database) to succeed
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockDbProduct),
+    } as Response);
+
+    render(<ProductDetail />);
+
+    // Wait for the final title from the database to appear
+    const finalTitle = await screen.findByText('Galo de Barcelos (DB)');
+    expect(finalTitle).toBeInTheDocument();
+
+    // Check that the loading spinner is gone
+    expect(
+      screen.queryByText('A carregar Galo de Barcelos...')
+    ).not.toBeInTheDocument();
+
+    // Check that the data source is 'database'
+    expect(screen.getByText(/Fonte: Base de Dados/i)).toBeInTheDocument();
+
+    // Check that both services were called
     expect(mockGetProduct).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:3002/products/jumpseller/32614736'
     );
   });
 
-  test('mostra mensagem de erro se o fetch do Jumpseller E da base de dados falharem', async () => {
+  test('shows an error message if both Jumpseller and database fail', async () => {
     // 1. Mock Jumpseller API to fail
     mockGetProduct.mockRejectedValue(new Error('Jumpseller API failure'));
-    
+
     // 2. Mock 'fetch' (database) to also fail
-    (global.fetch as jest.Mock).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       ok: false,
-      status: 404,
+      status: 500,
       json: () => Promise.resolve({ message: 'Database fetch failed' }),
-    });
+    } as Response);
 
     render(<ProductDetail />);
 
-    // Wait for the final error message to appear
-    const errorMsg = await screen.findByText(/Erro ao carregar produto/i);
+    // Wait for the error message to appear
+    const errorMsg = await screen.findByText('❌ Erro ao carregar produto');
     expect(errorMsg).toBeInTheDocument();
-    
+
+    // Check that the specific error message from the DB is shown
+    expect(await screen.findByText(/Database fetch failed/i)).toBeInTheDocument();
+
     // Check that the loading spinner is gone
-    expect(screen.queryByText(/A carregar Galo de Barcelos.../i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('A carregar Galo de Barcelos...')
+    ).not.toBeInTheDocument();
   });
 
-  test('permite trocar a foto ao clicar nas miniaturas', async () => {
-    // Use the successful fallback mock
+  test('allows changing the main image by clicking a thumbnail', async () => {
+    // We'll use the database fallback mock for this test
     mockFallbackSuccess();
-
     render(<ProductDetail />);
 
-    // Wait for the component to finish loading
-    await screen.findByText('Galo de Barcelos');
+    // Wait for the component to load
+    await screen.findByText('Galo de Barcelos (DB)');
 
     // Find the main image. It should be the first one in the array.
-    const mainImg = screen.getByAltText('Foto principal');
+    // The component uses the alt text for the main image.
+    const mainImg = screen.getByAltText('DB main photo');
     expect(mainImg).toBeInTheDocument();
     expect((mainImg as HTMLImageElement).src).toContain('main.jpg');
 
     // Find the thumbnail for the second image
-    // Note: The alt text "Foto extra" is on the thumbnail itself
-    const thumbExtra = screen.getByRole('img', { name: /Foto extra/i });
+    const thumbExtra = screen.getByRole('img', { name: /DB extra photo/i });
     expect(thumbExtra).toBeInTheDocument();
 
     // Click the thumbnail
     fireEvent.click(thumbExtra);
 
     // Now the main image should have the 'alt_text' of the second photo
-    const mainImgAfter = await screen.findByAltText('Foto extra');
+    const mainImgAfter = await screen.findByAltText('DB extra photo');
     expect(mainImgAfter).toBeInTheDocument();
     
     // And the src should have updated
