@@ -1,0 +1,14 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'europe-west1-docker.pkg.dev/mimetic-sunset-478418-d1/product-repo/t2-api',
+        '-f',
+        'apps/mips_product_page/Dockerfile.api',
+        '.'
+      ]
+
+images:
+  - europe-west1-docker.pkg.dev/mimetic-sunset-478418-d1/product-repo/t2-api

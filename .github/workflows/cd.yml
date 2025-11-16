@@ -15,7 +15,7 @@ jobs:
       REGION: europe-west1
       REPOSITORY: product-repo
       SERVICE_NAME: t2-app
-      VITE_API_BASE_URL: https://t2-app-1063861730054.europe-west1.run.app/
+      VITE_API_BASE_URL: https://t2-api-1063861730054.europe-west1.run.app
 
     steps:
       - name: Checkout repository
