@@ -46,7 +46,10 @@ RUN pnpm run build
 FROM base AS runner-web
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3000
+
+# Cloud Run injeta PORT (normalmente 8080)
+# se quiseres podes pôr default:
+ENV PORT=8080
 
 # Criar usuário não-root
 RUN addgroup --system --gid 1001 nodejs \
@@ -61,8 +64,7 @@ COPY --from=builder-web /app/apps/mips_product_page/dist ./dist
 RUN chown -R nextjs:nodejs /app
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 8080
 
-# Servir a pasta dist numa porta HTTP
-# (serve já foi instalado globalmente no stage base)
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Servir a pasta dist na porta definida em $PORT (Cloud Run usa 8080)
+CMD ["sh", "-c", "serve -s dist -l ${PORT}"]
