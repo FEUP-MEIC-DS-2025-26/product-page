@@ -30,6 +30,7 @@ type ProductFromApi = {
   mainPhoto: ProductPhoto | null;
   photos: ProductPhoto[];
   specifications: ProductSpecification[] | null;
+  brand?: string | null; // <-- Add brand field
 };
 
 // Helper function to strip HTML tags
@@ -85,6 +86,7 @@ const mapJumpsellerToProduct = (
         }
       : null,
     specifications: customFieldsSpecs,
+    brand: product.brand || null,
   };
 };
 
@@ -468,23 +470,39 @@ export default function ProductDetail() {
                       gap: 2,
                     }}
                   >
-                    <Typography
-                      variant="h3"
-                      component="h1"
-                      sx={{
-                        fontSize: {
-                          xs: '2rem',
-                          sm: '2.25rem',
-                          lg: '2.5rem',
-                        },
-                        fontWeight: 'bold',
-                        color: '#344E41',
-                        lineHeight: 1.1,
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {product.title}
-                    </Typography>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography
+                        variant="h3"
+                        component="h1"
+                        sx={{
+                          fontSize: {
+                            xs: '2rem',
+                            sm: '2.25rem',
+                            lg: '2.5rem',
+                          },
+                          fontWeight: 'bold',
+                          color: '#344E41',
+                          lineHeight: 1.1,
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {product.title}
+                      </Typography>
+                      {product.brand && (
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            color: '#588157',
+                            fontWeight: 600,
+                            fontSize: { xs: '1.05rem', sm: '1.15rem' },
+                            mt: 0.5,
+                            fontStyle: 'italic',
+                          }}
+                        >
+                          {product.brand}
+                        </Typography>
+                      )}
+                    </Box>
                     <IconButton
                       aria-label="Adicionar à wishlist"
                       sx={{
