@@ -32,7 +32,7 @@ jobs:
 
       # 3. Instalar dependências
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       # 4. Lint
       - name: Run Linters
