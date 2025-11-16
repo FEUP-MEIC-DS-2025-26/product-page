@@ -61,6 +61,6 @@ jobs:
           service: ${{ env.SERVICE_NAME }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ env.IMAGE_VERSION }}
           region: ${{ env.REGION }}
-          allow_unauthenticated: true
+          flags: --allow-unauthenticated
           env_vars: |
             GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
