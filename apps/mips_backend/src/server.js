@@ -118,6 +118,24 @@ app.get('/api/products/sku/:sku', async (req, res) => {
   }
 });
 
+app.get('/api/products/:id/reviews', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`Fetching reviews for product: ${id}`);
+    
+    const response = await jumpsellerClient.get(`/products/${id}/reviews.json`);
+    
+    console.log('Reviews fetched successfully');
+    res.json(response.data);
+  } catch (error) {
+    console.error(`Error fetching reviews for product ${req.params.id}:`, error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch product reviews',
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
 app.get('/api/orders', async (req, res) => {
   try {
     const { page = 1, limit = 50 } = req.query;

@@ -7,7 +7,7 @@ import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { getJumpsellerApi } from '../services/jumpsellerApi';
+import { getJumpsellerApi, JumpsellerReview } from '../services/jumpsellerApi';
 
 type ProductSpecification = {
   title: string;
@@ -38,11 +38,22 @@ const stripHtmlTags = (html: string): string => {
   return doc.body.textContent || '';
 };
 
+// Helper function to calculate average rating from reviews
+const calculateAverageRating = (reviews: JumpsellerReview[]): number => {
+  if (reviews.length === 0) return 0;
+  
+  const sum = reviews.reduce((acc, review) => acc + review.rating, 0);
+  return sum / reviews.length;
+};
+
 // Map Jumpseller product to ProductFromApi format
-const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
+const mapJumpsellerToProduct = (
+  jumpsellerProduct: any,
+  reviews: JumpsellerReview[]
+): ProductFromApi => {
   const product = jumpsellerProduct.product || jumpsellerProduct;
   
-  // Convert custom fields to specifications (including Historia now)
+  // Convert custom fields to specifications
   const customFieldsSpecs = product.fields
     ? product.fields.map((field: any) => ({
         title: field.label,
@@ -50,15 +61,17 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
       }))
     : [];
   
+  // Calculate average rating from reviews
+  const avgRating = calculateAverageRating(reviews);
+  
   return {
     id: product.id,
     title: product.name || 'Produto sem nome',
-    // storytelling now gets the description from Jumpseller
     storytelling: stripHtmlTags(product.description || 'Descrição não disponível.'),
     description: stripHtmlTags(product.description || 'Descrição não disponível.'),
     price: typeof product.price === 'number' ? product.price : parseFloat(product.price || '0'),
-    avg_score: 4.5,
-    reviewCount: 0,
+    avg_score: avgRating,
+    reviewCount: reviews.length,
     photos: product.images && product.images.length > 0 
       ? product.images.map((img: any) => ({
           photo_url: img.url,
@@ -80,6 +93,7 @@ const renderStars = (score: number) =>
     const id = `star-half-clip-${i}`;
     const full = i < Math.floor(score);
     const half = !full && score > i && score < i + 1;
+    
     return (
       <svg
         key={i}
@@ -122,7 +136,7 @@ export default function ProductDetail() {
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
   useEffect(() => {
-    let isMounted = true; // Prevent state updates after unmount
+    let isMounted = true;
 
     const fetchProduct = async () => {
       if (!isMounted) return;
@@ -130,29 +144,43 @@ export default function ProductDetail() {
       setLoading(true);
       setError(null);
       
-      // STEP 1: Try to fetch from Jumpseller API first
       console.log('🔍 Attempting to fetch product from Jumpseller API...');
       
       try {
         const api = getJumpsellerApi();
+        
+        // Fetch product data
         const jumpsellerProduct = await api.getProductBySKU('GALO-BCL-001');
         
-        if (!isMounted) return; // Check if component is still mounted
+        if (!isMounted) return;
         
-        const mappedProduct = mapJumpsellerToProduct({ product: jumpsellerProduct });
+        // Fetch reviews for the product
+        console.log('🔍 Fetching reviews for product...');
+        let reviews: JumpsellerReview[] = [];
+        try {
+          reviews = await api.getProductReviews(jumpsellerProduct.id);
+          console.log(`✅ Loaded ${reviews.length} reviews from Jumpseller`);
+        } catch (reviewError) {
+          console.warn('⚠️ Could not fetch reviews, using 0 reviews', reviewError);
+          reviews = [];
+        }
+        
+        // Map product with reviews
+        const mappedProduct = mapJumpsellerToProduct({ product: jumpsellerProduct }, reviews);
         
         console.log('✅ Product loaded from Jumpseller:', mappedProduct.title);
+        console.log(`   Reviews: ${mappedProduct.reviewCount}, Avg Rating: ${mappedProduct.avg_score.toFixed(2)}`);
+        
         setProduct(mappedProduct);
         setSource('jumpseller');
         setLoading(false);
-        // Successfully loaded from Jumpseller, stop here
         
       } catch (jumpsellerError) {
         console.warn('⚠️ Jumpseller API failed, falling back to database...', jumpsellerError);
         
         if (!isMounted) return;
         
-        // STEP 2: Fallback to database if Jumpseller fails
+        // Fallback to database
         try {
           console.log('🔍 Attempting to fetch product from database...');
           const res = await fetch('http://localhost:4000/products/1');
@@ -183,7 +211,6 @@ export default function ProductDetail() {
 
     fetchProduct();
 
-    // Cleanup function
     return () => {
       isMounted = false;
     };
@@ -502,7 +529,6 @@ export default function ProductDetail() {
                         lineHeight: 1.7,
                       }}
                     >
-                      {/* Main description area shows storytelling (which is description from Jumpseller) */}
                       {product.storytelling}
                     </Typography>
                   </Box>
@@ -543,26 +569,42 @@ export default function ProductDetail() {
                         flexGrow: 1,
                       }}
                     >
-                      <Box sx={{ display: 'flex', gap: 0.25 }}>
-                        {renderStars(product.avg_score)}
-                      </Box>
-                      <Typography
-                        variant="body1"
-                        sx={{
-                          fontSize: {
-                            xs: '1rem',
-                            sm: '1.1rem',
-                          },
-                          fontWeight: 500,
-                          color: '#3A5A40',
-                        }}
-                      >
-                        {reviewCount === 0
-                          ? 'Sem avaliações'
-                          : `(${reviewCount} avaliaç${
-                              reviewCount > 1 ? 'ões' : 'ão'
-                            })`}
-                      </Typography>
+                      {/* Only show stars if there are reviews */}
+                      {reviewCount > 0 && (
+                        <>
+                          <Box sx={{ display: 'flex', gap: 0.25 }}>
+                            {renderStars(product.avg_score)}
+                          </Box>
+                          <Typography
+                            variant="body1"
+                            sx={{
+                              fontSize: {
+                                xs: '1rem',
+                                sm: '1.1rem',
+                              },
+                              fontWeight: 500,
+                              color: '#3A5A40',
+                            }}
+                          >
+                            {product.avg_score.toFixed(1)} ({reviewCount} avaliaç{reviewCount > 1 ? 'ões' : 'ão'})
+                          </Typography>
+                        </>
+                      )}
+                      {reviewCount === 0 && (
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            fontSize: {
+                              xs: '1rem',
+                              sm: '1.1rem',
+                            },
+                            fontWeight: 500,
+                            color: '#999',
+                          }}
+                        >
+                          Sem avaliações
+                        </Typography>
+                      )}
                     </Box>
                   </Box>
                 </Box>
@@ -655,7 +697,7 @@ export default function ProductDetail() {
             </Grid>
           </Grid>
 
-          {/* História do Produto Section - shows description (same as storytelling from Jumpseller) */}
+          {/* História do Produto Section */}
           <Box
             sx={{
               bgcolor: '#F5F5F5',
@@ -713,7 +755,6 @@ export function ProductSpecifications() {
       
       setLoading(true);
       
-      // Try Jumpseller first
       console.log('🔍 Fetching specs from Jumpseller API...');
       
       try {
@@ -722,20 +763,26 @@ export function ProductSpecifications() {
         
         if (!isMounted) return;
         
-        const mappedProduct = mapJumpsellerToProduct({ product: jumpsellerProduct });
+        // Fetch reviews (though we don't use them for specs)
+        let reviews: JumpsellerReview[] = [];
+        try {
+          reviews = await api.getProductReviews(jumpsellerProduct.id);
+        } catch {
+          reviews = [];
+        }
+        
+        const mappedProduct = mapJumpsellerToProduct({ product: jumpsellerProduct }, reviews);
         
         console.log('✅ Specs loaded from Jumpseller');
         setProduct(mappedProduct);
         setSource('jumpseller');
         setLoading(false);
-        // Successfully loaded, stop here
         
       } catch (jumpsellerError) {
         console.warn('⚠️ Jumpseller specs failed, falling back to database...');
         
         if (!isMounted) return;
         
-        // Fallback to DB
         try {
           const res = await fetch('http://localhost:4000/products/1');
           

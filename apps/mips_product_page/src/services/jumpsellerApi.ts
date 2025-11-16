@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 
 interface JumpsellerConfig {
-  apiUrl: string; // Changed to use backend URL
+  apiUrl: string;
 }
 
 interface JumpsellerImage {
@@ -26,6 +26,18 @@ interface JumpsellerProduct {
     id: number;
     name: string;
   }>;
+}
+
+// Add review interface
+interface JumpsellerReview {
+  id: number;
+  rating: number; // 1-5 stars
+  comment: string;
+  reviewer_name: string;
+  reviewer_email: string;
+  status: string; // 'approved', 'pending', etc.
+  created_at: string;
+  updated_at: string;
 }
 
 interface JumpsellerOrder {
@@ -83,6 +95,17 @@ class JumpsellerApiClient {
     }
   }
 
+  // NEW: Fetch reviews for a specific product
+  async getProductReviews(productId: number): Promise<JumpsellerReview[]> {
+    try {
+      const response = await this.client.get(`/products/${productId}/reviews`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching reviews for product ${productId}:`, error);
+      throw error;
+    }
+  }
+
   async getOrders(page = 1, limit = 50): Promise<JumpsellerOrder[]> {
     try {
       const response = await this.client.get('/orders', {
@@ -121,4 +144,4 @@ export const getJumpsellerApi = (): JumpsellerApiClient => {
   return apiClient;
 };
 
-export type { JumpsellerProduct, JumpsellerConfig, JumpsellerImage, JumpsellerOrder };
+export type { JumpsellerProduct, JumpsellerConfig, JumpsellerImage, JumpsellerOrder, JumpsellerReview };
