@@ -1,0 +1,20 @@
+{
+  "name": "mips_backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.js",
+    "sync": "node src/sync.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.0",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.0"
+  }
+}

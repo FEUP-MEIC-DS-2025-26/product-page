@@ -29,15 +29,20 @@ model User {
 
 model Product {
   id            Int       @id @default(autoincrement())
+  jumpseller_id Int?      @unique  // Add this to track Jumpseller product ID
   title         String
   storytelling  String?
   description   String?
   price         Decimal    @db.Decimal(10,2)  // tipar no Postgres
   avg_score     Float      @default(0)
   specifications Json?
+  sku           String?    @unique  // Add SKU field
+  stock         Int?       // Add stock field
+  permalink     String?    // Add permalink
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt
   deleted_at    DateTime?
+  brand         String?
 
   created_by_user_id Int
   created_by         User   @relation("CreatedProducts", fields: [created_by_user_id], references: [id])
@@ -61,8 +66,11 @@ model ProductPhoto {
 
 model Review {
   id            Int      @id @default(autoincrement())
+  jumpseller_id Int?     @unique  // Add this to track Jumpseller review ID
   score         Int
   comment       String?
+  reviewer_name String?  // Add reviewer name
+  reviewer_email String? // Add reviewer email
   like_count    Int      @default(0)
   dislike_count Int      @default(0)
   created_at    DateTime @default(now())

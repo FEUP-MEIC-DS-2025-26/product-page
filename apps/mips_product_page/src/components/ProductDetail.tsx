@@ -4,8 +4,10 @@ import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
+import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
+import { getJumpsellerApi, JumpsellerReview } from '../services/jumpsellerApi';
 
 type ProductSpecification = {
   title: string;
@@ -28,6 +30,74 @@ type ProductFromApi = {
   mainPhoto: ProductPhoto | null;
   photos: ProductPhoto[];
   specifications: ProductSpecification[] | null;
+  brand?: string | null; // <-- Add brand field
+};
+
+// Product ID to fetch - Galo de Barcelos
+const GALO_PRODUCT_ID = 32614736;
+
+// Helper function to strip HTML tags
+const stripHtmlTags = (html: string): string => {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent || '';
+};
+
+// Helper function to calculate average rating from reviews
+const calculateAverageRating = (reviews: JumpsellerReview[]): number => {
+  if (reviews.length === 0) return 0;
+  
+  const validReviews = reviews.filter(review => {
+    const rating = Number(review.rating);
+    return !isNaN(rating) && rating >= 1 && rating <= 5;
+  });
+  
+  if (validReviews.length === 0) return 0;
+  
+  const sum = validReviews.reduce((acc, review) => acc + Number(review.rating), 0);
+  return Math.round((sum / validReviews.length) * 10) / 10;
+};
+
+// Map Jumpseller product to ProductFromApi format
+const mapJumpsellerToProduct = (
+  jumpsellerProduct: any,
+  reviews: JumpsellerReview[]
+): ProductFromApi => {
+  const product = jumpsellerProduct.product || jumpsellerProduct;
+  
+  // Convert custom fields to specifications
+  const customFieldsSpecs = product.fields
+    ? product.fields.map((field: any) => ({
+        title: field.label,
+        description: stripHtmlTags(field.value),
+      }))
+    : [];
+  
+  // Calculate average rating from reviews
+  const avgRating = calculateAverageRating(reviews);
+  
+  return {
+    id: product.id,
+    title: product.name || 'Produto sem nome',
+    storytelling: stripHtmlTags(product.description || 'Descrição não disponível.'),
+    description: stripHtmlTags(product.description || 'Descrição não disponível.'),
+    price: typeof product.price === 'number' ? product.price : parseFloat(product.price || '0'),
+    avg_score: avgRating,
+    reviewCount: reviews.length,
+    photos: product.images && product.images.length > 0 
+      ? product.images.map((img: any) => ({
+          photo_url: img.url,
+          alt_text: img.description || product.name,
+        }))
+      : [],
+    mainPhoto: product.images?.[0]
+      ? {
+          photo_url: product.images[0].url,
+          alt_text: product.images[0].description || product.name,
+        }
+      : null,
+    specifications: customFieldsSpecs,
+    brand: product.brand || null,
+  };
 };
 
 const renderStars = (score: number) =>
@@ -35,6 +105,7 @@ const renderStars = (score: number) =>
     const id = `star-half-clip-${i}`;
     const full = i < Math.floor(score);
     const half = !full && score > i && score < i + 1;
+    
     return (
       <svg
         key={i}
@@ -71,45 +142,151 @@ export default function ProductDetail() {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<'jumpseller' | 'database'>('jumpseller');
 
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchProduct = async () => {
+      if (!isMounted) return;
+      
+      setLoading(true);
+      setError(null);
+      
+      console.log(`🔍 Fetching Galo product (ID: ${GALO_PRODUCT_ID}) from Jumpseller API...`);
+      
       try {
-        // ajusta o ID aqui se o produto da seed não for o 1
-        const res = await fetch('http://localhost:4000/products/1');
-        if (!res.ok) {
-          throw new Error('Erro ao carregar produto');
+        const api = getJumpsellerApi();
+        
+        // Fetch product data by ID directly
+        const jumpsellerProduct = await api.getProduct(GALO_PRODUCT_ID);
+        
+        if (!isMounted) return;
+        
+        console.log('✅ Galo product found:', jumpsellerProduct.name);
+        
+        // Fetch reviews for the product
+        console.log(`🔍 Fetching reviews for product ID: ${jumpsellerProduct.id}...`);
+        let reviews: JumpsellerReview[] = [];
+        try {
+          reviews = await api.getProductReviews(jumpsellerProduct.id);
+          console.log(`✅ Loaded ${reviews.length} reviews from Jumpseller`);
+        } catch (reviewError) {
+          console.warn('⚠️ Could not fetch reviews, using 0 reviews', reviewError);
+          reviews = [];
         }
-        const data: ProductFromApi = await res.json();
-        console.log('Produto da API ====>', data);
-        setProduct(data);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'Erro ao carregar produto');
-      } finally {
+        
+        // Map product with reviews
+        const mappedProduct = mapJumpsellerToProduct({ product: jumpsellerProduct }, reviews);
+        
+        console.log('✅ Product loaded from Jumpseller:', mappedProduct.title);
+        console.log(`   Reviews: ${mappedProduct.reviewCount}, Avg Rating: ${mappedProduct.avg_score.toFixed(1)}`);
+        
+        setProduct(mappedProduct);
+        setSource('jumpseller');
         setLoading(false);
+        
+      } catch (jumpsellerError: any) {
+        console.warn(`⚠️ Jumpseller API failed for product ID ${GALO_PRODUCT_ID}, falling back to database...`, jumpsellerError);
+        
+        if (!isMounted) return;
+        
+        // Fallback to database - find product by jumpseller_id
+        try {
+          console.log(`🔍 Attempting to fetch product from database (Jumpseller ID: ${GALO_PRODUCT_ID})...`);
+          
+          // FIXED: Use correct backend port (3002) and correct endpoint
+          const res = await fetch(`http://localhost:3002/products/jumpseller/${GALO_PRODUCT_ID}`);
+          
+          if (!isMounted) return;
+          
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Erro ao carregar produto da base de dados');
+          }
+          
+          const dbProduct: ProductFromApi = await res.json();
+          
+          console.log('✅ Product loaded from database:', dbProduct.title);
+          setProduct(dbProduct);
+          setSource('database');
+          
+        } catch (dbError: any) {
+          console.error('❌ Database fetch also failed:', dbError);
+          if (isMounted) {
+            setError(dbError.message || `Erro ao carregar produto ${GALO_PRODUCT_ID}`);
+          }
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
+        }
       }
     };
 
     fetchProduct();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   if (loading) {
     return (
-      <Box sx={{ py: 4, textAlign: 'center' }}>
-        <Typography>A carregar produto…</Typography>
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '60vh',
+          flexDirection: 'column',
+          gap: 3
+        }}
+      >
+        <CircularProgress 
+          size={60} 
+          thickness={4}
+          sx={{ 
+            color: '#344E41',
+          }} 
+        />
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            color: '#344E41',
+            fontWeight: 500
+          }}
+        >
+          A carregar Galo de Barcelos...
+        </Typography>
       </Box>
     );
   }
 
   if (error || !product) {
     return (
-      <Box sx={{ py: 4, textAlign: 'center' }}>
-        <Typography color="error">
-          {error || 'Produto não encontrado.'}
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '40vh',
+          flexDirection: 'column',
+          gap: 2
+        }}
+      >
+        <Typography 
+          variant="h5" 
+          color="error" 
+          sx={{ fontWeight: 'bold' }}
+        >
+          ❌ Erro ao carregar produto
+        </Typography>
+        <Typography variant="body1" color="error">
+          {error || `Produto Galo de Barcelos não encontrado.`}
         </Typography>
       </Box>
     );
@@ -127,6 +304,23 @@ export default function ProductDetail() {
           px: { xs: 1.5, sm: 3, md: 0 },
         }}
       >
+        {/* Debug badge to show data source */}
+        <Box sx={{ mb: 2, textAlign: 'center' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              bgcolor: source === 'jumpseller' ? '#4caf50' : '#ff9800',
+              color: 'white',
+              px: 2,
+              py: 0.5,
+              borderRadius: 1,
+              fontWeight: 'bold',
+            }}
+          >
+            📦 Fonte: {source === 'jumpseller' ? 'Jumpseller API' : 'Base de Dados'} | ID: {GALO_PRODUCT_ID}
+          </Typography>
+        </Box>
+
         <Box
           sx={{
             bgcolor: '#E4E1D6',
@@ -186,7 +380,7 @@ export default function ProductDetail() {
                     src={
                       photos[selectedPhotoIndex]?.photo_url ||
                       product.mainPhoto?.photo_url ||
-                      ''
+                      '/galo.png'
                     }
                     alt={
                       photos[selectedPhotoIndex]?.alt_text ||
@@ -195,10 +389,12 @@ export default function ProductDetail() {
                     }
                     sx={{
                       width: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 2,
+                      height: '100%',
+                      objectFit: 'contain',
+                    }}
+                    onError={(e) => {
+                      console.error('Image failed to load:', e.currentTarget.src);
+                      e.currentTarget.src = '/galo.png';
                     }}
                   />
                 </Box>
@@ -246,6 +442,9 @@ export default function ProductDetail() {
                             height: '100%',
                             objectFit: 'cover',
                           }}
+                          onError={(e) => {
+                            e.currentTarget.src = '/galo.png';
+                          }}
                         />
                       </Box>
                     ))}
@@ -287,23 +486,39 @@ export default function ProductDetail() {
                       gap: 2,
                     }}
                   >
-                    <Typography
-                      variant="h3"
-                      component="h1"
-                      sx={{
-                        fontSize: {
-                          xs: '2rem',
-                          sm: '2.25rem',
-                          lg: '2.5rem',
-                        },
-                        fontWeight: 'bold',
-                        color: '#344E41',
-                        lineHeight: 1.1,
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {product.title}
-                    </Typography>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography
+                        variant="h3"
+                        component="h1"
+                        sx={{
+                          fontSize: {
+                            xs: '2rem',
+                            sm: '2.25rem',
+                            lg: '2.5rem',
+                          },
+                          fontWeight: 'bold',
+                          color: '#344E41',
+                          lineHeight: 1.1,
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {product.title}
+                      </Typography>
+                      {product.brand && (
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            color: '#588157',
+                            fontWeight: 600,
+                            fontSize: { xs: '1.05rem', sm: '1.15rem' },
+                            mt: 0.5,
+                            fontStyle: 'italic',
+                          }}
+                        >
+                          {product.brand}
+                        </Typography>
+                      )}
+                    </Box>
                     <IconButton
                       aria-label="Adicionar à wishlist"
                       sx={{
@@ -348,7 +563,7 @@ export default function ProductDetail() {
                         lineHeight: 1.7,
                       }}
                     >
-                      {product.description}
+                      {product.storytelling}
                     </Typography>
                   </Box>
                 </Box>
@@ -388,26 +603,42 @@ export default function ProductDetail() {
                         flexGrow: 1,
                       }}
                     >
-                      <Box sx={{ display: 'flex', gap: 0.25 }}>
-                        {renderStars(product.avg_score)}
-                      </Box>
-                      <Typography
-                        variant="body1"
-                        sx={{
-                          fontSize: {
-                            xs: '1rem',
-                            sm: '1.1rem',
-                          },
-                          fontWeight: 500,
-                          color: '#3A5A40',
-                        }}
-                      >
-                        {reviewCount === 0
-                          ? 'Sem avaliações'
-                          : `(${reviewCount} avaliaç${
-                              reviewCount > 1 ? 'ões' : 'ão'
-                            })`}
-                      </Typography>
+                      {/* Only show stars if there are reviews */}
+                      {reviewCount > 0 && (
+                        <>
+                          <Box sx={{ display: 'flex', gap: 0.25 }}>
+                            {renderStars(product.avg_score)}
+                          </Box>
+                          <Typography
+                            variant="body1"
+                            sx={{
+                              fontSize: {
+                                xs: '1rem',
+                                sm: '1.1rem',
+                              },
+                              fontWeight: 500,
+                              color: '#3A5A40',
+                            }}
+                          >
+                            {product.avg_score.toFixed(1)} ({reviewCount} avaliaç{reviewCount > 1 ? 'ões' : 'ão'})
+                          </Typography>
+                        </>
+                      )}
+                      {reviewCount === 0 && (
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            fontSize: {
+                              xs: '1rem',
+                              sm: '1.1rem',
+                            },
+                            fontWeight: 500,
+                            color: '#999',
+                          }}
+                        >
+                          Sem avaliações
+                        </Typography>
+                      )}
                     </Box>
                   </Box>
                 </Box>
@@ -454,7 +685,7 @@ export default function ProductDetail() {
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
                       />
                     </svg>
                     Comprar
@@ -500,7 +731,7 @@ export default function ProductDetail() {
             </Grid>
           </Grid>
 
-          {/* Storytelling */}
+          {/* História do Produto Section */}
           <Box
             sx={{
               bgcolor: '#F5F5F5',
@@ -530,7 +761,7 @@ export default function ProductDetail() {
                 lineHeight: 1.7,
               }}
             >
-              {product.storytelling}
+              {product.description}
             </Typography>
           </Box>
         </Box>
@@ -542,35 +773,101 @@ export default function ProductDetail() {
 }
 
 /**
- * Versão simples do ProductSpecifications que também vai à API.
- * (Mais tarde podes receber o `product` por prop em vez disto.)
+ * ProductSpecifications - Fetches specs for Galo de Barcelos
  */
 export function ProductSpecifications() {
   const [product, setProduct] = useState<ProductFromApi | null>(null);
   const [loading, setLoading] = useState(true);
+  const [source, setSource] = useState<'jumpseller' | 'database'>('jumpseller');
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchProduct = async () => {
+      if (!isMounted) return;
+      
+      setLoading(true);
+      
+      console.log(`🔍 Fetching specs for Galo (ID: ${GALO_PRODUCT_ID}) from Jumpseller API...`);
+      
       try {
-        const res = await fetch('http://localhost:4000/products/1');
-        if (!res.ok) throw new Error();
-        const data: ProductFromApi = await res.json();
-        setProduct(data);
-      } catch {
-        setProduct(null);
-      } finally {
+        const api = getJumpsellerApi();
+        const jumpsellerProduct = await api.getProduct(GALO_PRODUCT_ID);
+        
+        if (!isMounted) return;
+        
+        // Fetch reviews
+        let reviews: JumpsellerReview[] = [];
+        try {
+          reviews = await api.getProductReviews(jumpsellerProduct.id);
+        } catch {
+          reviews = [];
+        }
+        
+        const mappedProduct = mapJumpsellerToProduct({ product: jumpsellerProduct }, reviews);
+        
+        console.log('✅ Specs loaded from Jumpseller');
+        setProduct(mappedProduct);
+        setSource('jumpseller');
         setLoading(false);
+        
+      } catch (jumpsellerError) {
+        console.warn('⚠️ Jumpseller specs failed, falling back to database...');
+        
+        if (!isMounted) return;
+        
+        try {
+          // FIXED: Use correct backend port (3002)
+          const res = await fetch(`http://localhost:3002/products/jumpseller/${GALO_PRODUCT_ID}`);
+          
+          if (!isMounted) return;
+          
+          if (res.ok) {
+            const dbProduct: ProductFromApi = await res.json();
+            setProduct(dbProduct);
+            setSource('database');
+          }
+        } catch {
+          // Silently fail
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
+        }
       }
     };
 
     fetchProduct();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  if (loading || !product) return null;
+  if (loading) {
+    return (
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          py: 4 
+        }}
+      >
+        <CircularProgress 
+          size={40} 
+          sx={{ color: '#344E41' }} 
+        />
+      </Box>
+    );
+  }
+
+  if (!product) return null;
 
   const specifications = Array.isArray(product.specifications)
     ? product.specifications
     : [];
+
+  if (specifications.length === 0) return null;
 
   return (
     <>
