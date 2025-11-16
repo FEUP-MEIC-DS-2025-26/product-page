@@ -6,9 +6,13 @@ import { prisma } from '../lib/prisma';
 const app = express();
 const port = process.env.PORT || 4000;
 
+// 👉 Origem do frontend (pode ser várias, separadas por vírgulas)
+const FRONTEND_ORIGIN =
+  process.env.FRONTEND_ORIGIN || 'http://localhost:3001';
+
 app.use(
   cors({
-    origin: 'http://localhost:3001', 
+    origin: FRONTEND_ORIGIN.split(','), // ex: "http://localhost:3001,https://t2-app-xxx.run.app"
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
@@ -72,5 +76,7 @@ app.get('/products/:id', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`API de produtos a correr em http://localhost:${port}`);
+  console.log(`API de produtos a correr na porta ${port}`);
 });
+
+export default app;
