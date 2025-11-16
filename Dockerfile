@@ -35,6 +35,9 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 # 3) Gerar o Prisma Client (se a app usar DB; se não usar, também não faz mal)
 RUN pnpm exec prisma generate
 
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+
 # 4) Build do mips_product_page com rsbuild
 WORKDIR /app/apps/mips_product_page
 RUN pnpm run build

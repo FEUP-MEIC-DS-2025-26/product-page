@@ -15,6 +15,7 @@ jobs:
       REGION: europe-west1
       REPOSITORY: product-repo
       SERVICE_NAME: t2-app
+      VITE_API_BASE_URL: https://t2-app-1063861730054.europe-west1.run.app/
 
     steps:
       - name: Checkout repository
@@ -36,6 +37,7 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -f Dockerfile \
+            --build-arg VITE_API_BASE_URL=${VITE_API_BASE_URL} \
             -t $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:latest \
             -t $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:${IMAGE_VERSION} \
             .

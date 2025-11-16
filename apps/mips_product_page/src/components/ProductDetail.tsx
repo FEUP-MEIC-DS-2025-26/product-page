@@ -75,11 +75,13 @@ export default function ProductDetail() {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+
   useEffect(() => {
     const fetchProduct = async () => {
       try {
         // ajusta o ID aqui se o produto da seed não for o 1
-        const res = await fetch('http://localhost:4000/products/1');
+        const res = await fetch(`${API_BASE_URL}/products/1`);
         if (!res.ok) {
           throw new Error('Erro ao carregar produto');
         }
@@ -548,11 +550,12 @@ export default function ProductDetail() {
 export function ProductSpecifications() {
   const [product, setProduct] = useState<ProductFromApi | null>(null);
   const [loading, setLoading] = useState(true);
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const res = await fetch('http://localhost:4000/products/1');
+        const res = await fetch(`${API_BASE_URL}/products/1`);
         if (!res.ok) throw new Error();
         const data: ProductFromApi = await res.json();
         setProduct(data);
