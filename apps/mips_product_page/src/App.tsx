@@ -13,7 +13,7 @@ const App = () => {
   useEffect(() => {
     try {
       initJumpsellerApi({
-        apiUrl: import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3002/api",
+        apiUrl: import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3103/api",
       });
       console.log("Jumpseller API initialized successfully");
 
