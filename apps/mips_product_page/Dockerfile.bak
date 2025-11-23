@@ -1,0 +1,21 @@
+FROM base AS builder
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+
+# garantir instalação de todas as deps (dev+prod) no builder
+RUN NODE_ENV=development pnpm install --frozen-lockfile --ignore-scripts \
+    || NODE_ENV=development pnpm install --ignore-scripts --force
+
+# copiar depois das deps para tirar partido do cache
+COPY . .
+
+# gerar prisma client se existir (não falha o build)
+RUN pnpm exec prisma generate || true
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# garantir permissão e correr o build (rsbuild ou script fallback)
+RUN find node_modules -type f -name "rsbuild" -exec chmod +x {} \; || true
+RUN pnpm exec -- rsbuild build || pnpm run build
+
+# garantir que existam pastas usadas pelo runner (mesmo vazias)
+RUN mkdir -p .next public || true
