@@ -1,0 +1,60 @@
+name: Deploy 
+
+on:
+  push:
+    branches:
+      - main  
+
+env:
+  PROJECT_ID: mimetic-sunset-478418-d1
+  REGION: europe-west1
+  API_URL: https://t2-api-34ootpkhva-ew.a.run.app/api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: Login na Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configurar Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Deploy Backend
+        run: |
+          # Submit Build
+          gcloud builds submit --config=cloudbuild.api.yaml . --project=${{ env.PROJECT_ID }}
+          
+          # Deploy Cloud Run
+          gcloud run deploy t2-api \
+            --image=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-api:latest \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --allow-unauthenticated \
+            --port=3002 \
+            --add-cloudsql-instances=mimetic-sunset-478418-d1:europe-west1:t2-postgres-db \
+            --set-env-vars="JUMPSELLER_LOGIN=9b17635cae02b02f637e973d78f2d421,JUMPSELLER_TOKEN=ef9a80dfb6d3c1bcae9f3a5d2589d0d3,DATABASE_URL=postgresql://postgres:gyokeres@localhost/product-page?host=/cloudsql/mimetic-sunset-478418-d1:europe-west1:t2-postgres-db"
+
+      - name: Deploy Frontend
+        run: |
+          # Build Web (Com a variavel de API injetada)
+          gcloud builds submit \
+            --tag=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
+            --build-arg="REACT_APP_API_BASE=${{ env.API_URL }}" \
+            apps/mips_product_page \
+            --project=${{ env.PROJECT_ID }}
+
+          # Deploy Cloud Run
+          gcloud run deploy t2-web \
+            --image=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --allow-unauthenticated
