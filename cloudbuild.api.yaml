@@ -1,0 +1,5 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'build', '-t', 'europe-west1-docker.pkg.dev/mimetic-sunset-478418-d1/product-repo/t2-api:latest', '-f', 'apps/mips_backend/Dockerfile', '.' ]
+images:
+  - 'europe-west1-docker.pkg.dev/mimetic-sunset-478418-d1/product-repo/t2-api:latest'

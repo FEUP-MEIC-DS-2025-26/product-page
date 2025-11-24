@@ -7,13 +7,17 @@ import ProductDetail from "./components/ProductDetail";
 import { ProductSpecifications } from "./components/ProductDetail";
 import { initJumpsellerApi, getJumpsellerApi } from "./services/jumpsellerApi";
 
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? 'http://localhost:3103/api' 
+  : 'https://t2-api-34ootpkhva-ew.a.run.app/api';
+
 const App = () => {
   const [productSpecs, setProductSpecs] = useState<Array<{ title: string; description: string }>>([]);
 
   useEffect(() => {
     try {
       initJumpsellerApi({
-        apiUrl: import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3103/api",
+        apiUrl: API_BASE_URL, 
       });
       console.log("Jumpseller API initialized successfully");
 

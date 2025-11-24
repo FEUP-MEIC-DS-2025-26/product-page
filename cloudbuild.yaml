@@ -1,0 +1,77 @@
+steps:
+  # ==========================================
+  # 1. BUILD BACKEND (API)
+  # ==========================================
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-api'
+    args: [ 'build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-api:latest', '-f', 'apps/mips_backend/Dockerfile', '.' ]
+
+  # ==========================================
+  # 2. BUILD FRONTEND (WEB)
+  # ==========================================
+  # Precisamos de passar o argumento do API URL durante o build
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-web'
+    args: 
+      - 'build'
+      - '--build-arg'
+      - 'REACT_APP_API_BASE=https://t2-api-1063861730054.europe-west1.run.app/api' # Confirme se este URL está certo
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-web:latest'
+      - 'apps/mips_product_page'
+
+  # ==========================================
+  # 3. PUSH IMAGES (Enviar para o Google Artifact Registry)
+  # ==========================================
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-all'
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-api:latest']
+  
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-web:latest']
+
+  # ==========================================
+  # 4. DEPLOY BACKEND (Cloud Run)
+  # ==========================================
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-api'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 't2-api'
+      - '--image'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-api:latest'
+      - '--region'
+      - 'europe-west1'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '3002'
+      # AQUI CONFIGURAMOS A LIGAÇÃO À BASE DE DADOS AUTOMATICAMENTE
+      - '--add-cloudsql-instances'
+      - 'mimetic-sunset-478418-d1:europe-west1:t2-postgres-db'
+      - '--set-env-vars'
+      - 'JUMPSELLER_LOGIN=9b17635cae02b02f637e973d78f2d421,JUMPSELLER_TOKEN=ef9a80dfb6d3c1bcae9f3a5d2589d0d3,DATABASE_URL=postgresql://postgres:gyokeres@localhost/product-page?host=/cloudsql/mimetic-sunset-478418-d1:europe-west1:t2-postgres-db'
+
+  # ==========================================
+  # 5. DEPLOY FRONTEND (Cloud Run)
+  # ==========================================
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-web'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 't2-web'
+      - '--image'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-web:latest'
+      - '--region'
+      - 'europe-west1'
+      - '--allow-unauthenticated'
+
+images:
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-api:latest'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-web:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
