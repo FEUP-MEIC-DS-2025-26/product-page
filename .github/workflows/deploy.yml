@@ -46,14 +46,11 @@ jobs:
 
       - name: Deploy Frontend
         run: |
-          # Build Web (Com a variavel de API injetada)
           gcloud builds submit \
             --tag=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
-            --build-arg="REACT_APP_API_BASE=${{ env.API_URL }}" \
             apps/mips_product_page \
             --project=${{ env.PROJECT_ID }}
 
-          # Deploy Cloud Run
           gcloud run deploy t2-web \
             --image=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
             --region=${{ env.REGION }} \
