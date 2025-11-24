@@ -3,7 +3,8 @@ name: Deploy
 on:
   push:
     branches:
-      - main  
+      - main 
+      - '**' 
 
 env:
   PROJECT_ID: mimetic-sunset-478418-d1
