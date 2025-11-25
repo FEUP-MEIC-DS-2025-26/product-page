@@ -16,25 +16,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Configurar ambiente (Node v20 para maior compatibilidade com os Dockerfiles v22/25)
+      # 2. Configurar ambiente
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' 
-          
+          node-version: '20'
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 8 # Mantido na v8 conforme os teus Dockerfiles
+          version: 8
 
-      # 3. Instalar dependências (cache automático ativado pelo setup-node se houver lockfile)
+      # 3. Instalar dependências
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       # 4. Linting
       - name: Run Linters
         run: pnpm run lint
-        continue-on-error: false # Falha o pipeline se houver erros de lint
+        continue-on-error: false
 
       # 5. Testes
       - name: Run Tests
@@ -43,11 +43,10 @@ jobs:
       # 6. Auditoria de Segurança
       - name: Run pnpm Audit
         run: pnpm audit --prod
-        continue-on-error: true # Opcional: define false se quiseres bloquear builds com vulns
+        continue-on-error: true
 
       # ------------------------------------------------------------------
       # 7. DOCKER BUILDS
-      # O contexto (.) é a raiz para permitir acesso a ficheiros partilhados (ex: prisma)
       # ------------------------------------------------------------------
 
       # Backend (mips_backend)
@@ -57,12 +56,7 @@ jobs:
             -f apps/mips_backend/Dockerfile \
             -t mips-backend:latest
 
-      # Micro-Frontend: Host (mips_host)
-      - name: Build Docker: Host
-        run: |
-          docker build . \
-            -f apps/mips_host/Dockerfile \
-            -t mips-host:latest
+      # NOTA: mips_host foi removido conforme pedido.
 
       # Micro-Frontend: Product Page (mips_product_page)
       - name: Build Docker: Product Page
@@ -78,7 +72,7 @@ jobs:
             -f apps/mips_shopping_cart/Dockerfile \
             -t mips-shopping-cart:latest
 
-      # Root Web App (O Dockerfile complexo multi-stage)
+      # Root Web App
       - name: Build Docker: Root Web App
         run: |
           docker build . \
