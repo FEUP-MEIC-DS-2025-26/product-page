@@ -48,14 +48,19 @@ jobs:
 
       - name: Deploy Frontend (Product Page)
         run: |
-          # --- CORREÇÃO AQUI ---
-          # 1. O contexto passou a ser '.' (a raiz) para apanhar a pasta prisma
-          # 2. Usamos --file para apontar para o Dockerfile correto
-          gcloud builds submit . \
-            --file=apps/mips_product_page/Dockerfile \
-            --tag=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
-            --project=${{ env.PROJECT_ID }}
+          # 1. Configurar Docker para autenticar no Google Artifact Registry
+          gcloud auth configure-docker europe-west1-docker.pkg.dev
 
+          # 2. Build da Imagem (Local no Runner)
+          # Aqui sim, o -f funciona e o ponto final (.) define o contexto na raiz
+          docker build . \
+            -f apps/mips_product_page/Dockerfile \
+            -t europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest
+
+          # 3. Push da Imagem para a Google Cloud
+          docker push europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest
+
+          # 4. Deploy no Cloud Run (igual ao que tinhas)
           gcloud run deploy t2-web \
             --image=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
             --region=${{ env.REGION }} \
