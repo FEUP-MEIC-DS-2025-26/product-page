@@ -48,21 +48,24 @@ jobs:
 
       - name: Deploy Frontend (Product Page)
         run: |
-          # 1. Configurar Docker para autenticar no Google Artifact Registry
+          # 1. Autenticar Docker com a Google
           gcloud auth configure-docker europe-west1-docker.pkg.dev
 
-          # 2. Build da Imagem (Local no Runner)
-          # Aqui sim, o -f funciona e o ponto final (.) define o contexto na raiz
+          # 2. Build da Imagem
+          # O ponto (.) no fim significa "usa a pasta atual como contexto" (para apanhar a pasta prisma da raiz)
+          # O -f diz "mas usa as instruções deste ficheiro específico" (ignorando o Host)
           docker build . \
             -f apps/mips_product_page/Dockerfile \
             -t europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest
 
-          # 3. Push da Imagem para a Google Cloud
+          # 3. Enviar imagem para a Google
           docker push europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest
 
-          # 4. Deploy no Cloud Run (igual ao que tinhas)
+          # 4. Deploy no Cloud Run
+          # Nota: Se quiseres separar nomes, podes mudar 't2-web' para 't2-product-page'
           gcloud run deploy t2-web \
             --image=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
             --region=${{ env.REGION }} \
             --project=${{ env.PROJECT_ID }} \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            --set-env-vars="API_URL=${{ env.API_URL }}"
