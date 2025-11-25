@@ -1,34 +1,36 @@
-# apps/mips_backend/Dockerfile
-
+# Usa uma versão compatível com o teu projeto
 FROM node:22-alpine
 
-# Workdir dentro do container
 WORKDIR /app
 
-# pnpm + deps base
+# Instalar pnpm e dependências de sistema necessárias para o Prisma (OpenSSL é crucial em Alpine)
 RUN npm install -g pnpm@8 \
-  && apk add --no-cache libc6-compat
+    && apk add --no-cache libc6-compat openssl
 
-# Copiar apenas o package.json + pnpm-lock do backend
+# 1. Copiar os ficheiros de dependências DO BACKEND
+# Baseado na tua imagem, tens o pnpm-lock.yaml dentro da pasta, por isso copiamos também.
 COPY apps/mips_backend/package.json apps/mips_backend/pnpm-lock.yaml ./
 
-# Instalar dependências do backend
+# 2. Instalar dependências do projeto
 RUN pnpm install --force
 
-# Copiar a pasta prisma da root para dentro do container
+# 3. [CRÍTICO] Forçar a instalação do Prisma CLI
+# Como estamos num ambiente isolado Docker e o prisma provavelmente está na raiz do monorepo,
+# temos de o instalar manualmente aqui para o comando 'generate' funcionar.
+RUN pnpm add -D prisma
+
+# 4. Copiar a pasta prisma da RAIZ para dentro do contentor
 COPY prisma ./prisma
 
-# Copiar o código do backend
+# 5. Copiar o resto do código fonte do backend
 COPY apps/mips_backend/. .
 
-# Gerar o Prisma Client (usa schema em ./prisma/schema.prisma)
+# 6. Gerar o cliente Prisma
 RUN npx prisma generate
 
-# Variáveis básicas
+# Configurações finais
 ENV NODE_ENV=development
 ENV PORT=3003
-
 EXPOSE 3003
 
-# Ajusta se o script "dev" do backend tiver outro nome
 CMD ["pnpm", "dev"]
