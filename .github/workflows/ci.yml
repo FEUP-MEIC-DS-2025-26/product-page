@@ -50,30 +50,28 @@ jobs:
       # ------------------------------------------------------------------
 
       # Backend (mips_backend)
-      - name: Build Docker: Backend
+      - name: Build Docker Backend
         run: |
           docker build . \
             -f apps/mips_backend/Dockerfile \
             -t mips-backend:latest
 
-      # NOTA: mips_host foi removido conforme pedido.
-
       # Micro-Frontend: Product Page (mips_product_page)
-      - name: Build Docker: Product Page
+      - name: Build Docker Product Page
         run: |
           docker build . \
             -f apps/mips_product_page/Dockerfile \
             -t mips-product-page:latest
 
       # Micro-Frontend: Shopping Cart (mips_shopping_cart)
-      - name: Build Docker: Shopping Cart
+      - name: Build Docker Shopping Cart
         run: |
           docker build . \
             -f apps/mips_shopping_cart/Dockerfile \
             -t mips-shopping-cart:latest
 
       # Root Web App
-      - name: Build Docker: Root Web App
+      - name: Build Docker Root Web App
         run: |
           docker build . \
             -f Dockerfile \
