@@ -219,17 +219,20 @@ importers:
       '@types/express':
         specifier: ^5.0.5
         version: 5.0.5
+      '@types/node':
+        specifier: ^20
+        version: 20.19.25
       '@types/react':
-        specifier: ^18.3.11
+        specifier: ^18.3.26
         version: 18.3.26
       '@types/react-dom':
-        specifier: ~18.3.1
+        specifier: ~18.3.7
         version: 18.3.7(@types/react@18.3.26)
       tsx:
         specifier: ^4.20.6
         version: 4.20.6
       typescript:
-        specifier: ^5.7.2
+        specifier: ^5.9.3
         version: 5.9.3
 
   apps/mips_shopping_cart:
