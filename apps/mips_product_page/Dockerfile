@@ -56,4 +56,4 @@ EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD curl -f http://localhost:3000/ || exit 1
 
-CMD ["sh", "-c", "if [ -d ./dist ]; then serve -s dist -l $PORT; elif [ -d ./public ]; then serve -s public -l $PORT; else pnpm start; fi"]
+CMD ["sh", "-c", "if [ -d ./dist ]; then serve -s dist -l $PORT -C; elif [ -d ./public ]; then serve -s public -l $PORT -C; else pnpm start; fi"]
