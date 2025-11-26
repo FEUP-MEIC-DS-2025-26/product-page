@@ -1,29 +1,17 @@
-import { createModuleFederationConfig } from '@module-federation/rsbuild-plugin';
+import { defineConfig } from '@rsbuild/core';
+import { pluginReact } from '@rsbuild/plugin-react';
+import { pluginModuleFederation } from '@module-federation/rsbuild-plugin';
+import moduleFederationConfig from './module-federation.config';
 
-export default createModuleFederationConfig({
-  name: 'mips_product_page', // 1. O nome único do teu microfrontend
-  filename: 'mf-manifest.json', // 2. O manifesto que o Host vai ler
-  exposes: {
-    // 3. A "porta de entrada".
-    // Quem consumir este MF vai importar 'mips_product_page/ProductPage'
-    './ProductPage': './src/App.tsx', 
+export default defineConfig({
+  plugins: [pluginReact(), pluginModuleFederation(moduleFederationConfig)],
+  server: {
+    port: 3001,
   },
-  shared: {
-    react: {
-      singleton: true,
-      requiredVersion: '^18.3.1',
-    },
-    'react-dom': {
-      singleton: true,
-      requiredVersion: '^18.3.1',
-    },
-    'react-router-dom': {
-      singleton: true,
-      requiredVersion: '^7.9.5',
-    },
-    // Opcional: partilhar MUI se o Host também usar, para reduzir tamanho
-    '@mui/material': { singleton: true },
-    '@emotion/react': { singleton: true },
-    '@emotion/styled': { singleton: true },
+  // --- A ALTERAÇÃO IMPORTANTE ESTÁ AQUI EM BAIXO ---
+  output: {
+    // 'auto' faz com que o Rsbuild detete automaticamente o domínio onde está a correr.
+    // Isto resolve problemas de caminhos errados (404) ao carregar scripts na Cloud.
+    assetPrefix: 'auto',
   },
 });
