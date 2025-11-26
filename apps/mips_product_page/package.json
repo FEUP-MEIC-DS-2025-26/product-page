@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "rsbuild dev --open",
     "build": "rsbuild build",
+    "postbuild-mf": "node ./scripts/update-mf-manifest.js",
     "preview": "rsbuild preview",
     "dev:api": "tsx src/api/product.ts"
   },
