@@ -31,4 +31,5 @@ export default createModuleFederationConfig({
       requiredVersion: "^11.0.0",
     },
   },
+  dts: false,
 });

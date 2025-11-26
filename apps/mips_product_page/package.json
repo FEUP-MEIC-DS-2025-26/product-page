@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "rsbuild dev --open",
     "build": "rsbuild build",
-    "postbuild-mf": "node ./scripts/update-mf-manifest.js",
     "preview": "rsbuild preview",
+    "serve": "serve -s dist -p 3000 --cors",
     "dev:api": "tsx src/api/product.ts"
   },
   "prisma": {
@@ -34,6 +34,7 @@
     "@types/node": "^20",
     "@types/react": "^18.3.26",
     "@types/react-dom": "~18.3.7",
+    "serve": "^14.2.5",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
