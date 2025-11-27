@@ -46,7 +46,7 @@ steps:
       - 'europe-west1'
       - '--allow-unauthenticated'
       - '--port'
-      - '3002'
+      - '3003'
       # AQUI CONFIGURAMOS A LIGAÇÃO À BASE DE DADOS AUTOMATICAMENTE
       - '--add-cloudsql-instances'
       - 'mimetic-sunset-478418-d1:europe-west1:t2-postgres-db'

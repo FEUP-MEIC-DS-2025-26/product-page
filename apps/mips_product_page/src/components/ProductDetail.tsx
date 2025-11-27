@@ -109,7 +109,7 @@ const renderStars = (score: number) =>
   });
 
 // --- COMPONENT PRINCIPAL ---
-// Alteração Importante: Aceita productId como prop!
+// Alteração Importante:  Aceita productId como prop!
 interface ProductDetailProps {
   productId?: string | number;
 }
