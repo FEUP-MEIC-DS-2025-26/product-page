@@ -10,11 +10,7 @@ import { useTheme } from '@mui/material/styles';
 import { JumpsellerReview } from '../services/jumpsellerApi';
 
 // Define a URL base dependendo do ambiente
-export const API_BASE_URL =
-  typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:3103/api'
-    : 'https://t2-api-34ootpkhva-ew.a.run.app/api';
-    
+export const API_BASE_URL = "https://api.madeinportugal.store/api/";
 // --- TYPES ---
 type ProductSpecification = {
   title: string;

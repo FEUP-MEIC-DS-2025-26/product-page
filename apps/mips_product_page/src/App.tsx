@@ -7,10 +7,7 @@ import ProductDetail from "./components/ProductDetail";
 import { ProductSpecifications } from "./components/ProductDetail";
 import { initJumpsellerApi, getJumpsellerApi } from "./services/jumpsellerApi";
 
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? 'http://localhost:3103/api' 
-  : 'https://t2-api-34ootpkhva-ew.a.run.app/api';
-
+const API_BASE_URL = "https://api.madeinportugal.store/api/"; 
 const App = () => {
   const [productSpecs, setProductSpecs] = useState<Array<{ title: string; description: string }>>([]);
 
