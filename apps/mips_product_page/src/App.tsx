@@ -7,7 +7,7 @@ import ProductDetail from "./components/ProductDetail";
 import { ProductSpecifications } from "./components/ProductDetail";
 import { initJumpsellerApi, getJumpsellerApi } from "./services/jumpsellerApi";
 
-const API_BASE_URL = "https://api.madeinportugal.store/api/"; 
+const API_BASE_URL = "https://api.madeinportugal.store/api"; 
 const App = () => {
   const [productSpecs, setProductSpecs] = useState<Array<{ title: string; description: string }>>([]);
 

@@ -10,7 +10,7 @@ import { useTheme } from '@mui/material/styles';
 import { JumpsellerReview } from '../services/jumpsellerApi';
 
 // Define a URL base dependendo do ambiente
-export const API_BASE_URL = "https://api.madeinportugal.store/api/";
+export const API_BASE_URL = "https://api.madeinportugal.store/api";
 // --- TYPES ---
 type ProductSpecification = {
   title: string;
