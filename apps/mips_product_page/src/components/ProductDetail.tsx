@@ -119,7 +119,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [source, setSource] = useState<'jumpseller' | 'database'>('database');
+  const [source, setSource] = useState<'jumpseller' | 'database'>('jumpseller');
 
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
