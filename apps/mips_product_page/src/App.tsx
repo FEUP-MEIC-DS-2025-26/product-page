@@ -7,51 +7,51 @@ import ProductDetail from "./components/ProductDetail";
 import { ProductSpecifications } from "./components/ProductDetail";
 import { initJumpsellerApi, getJumpsellerApi } from "./services/jumpsellerApi";
 
-const API_BASE_URL = "https://api.madeinportugal.store/api"; 
-const App = () => {
-  const [productSpecs, setProductSpecs] = useState<Array<{ title: string; description: string }>>([]);
+const API_BASE_URL = "https://api.madeinportugal.store/api";
+
+type AppProps = {
+  initialProductId?: string | number;
+};
+
+const App = ({ initialProductId }: AppProps) => {
+  const [productSpecs, setProductSpecs] = useState<
+    Array<{ title: string; description: string }>
+  >([]);
 
   useEffect(() => {
     try {
-      initJumpsellerApi({
-        apiUrl: API_BASE_URL, 
-      });
-      console.log("Jumpseller API initialized successfully");
-
-      // Fetch product to get specifications
+      initJumpsellerApi({ apiUrl: API_BASE_URL });
       const fetchProductSpecs = async () => {
         try {
           const api = getJumpsellerApi();
           const product = await api.getProductBySKU("GALO-BCL-001");
-
-          // Extract custom fields excluding "Historia" - using label as title
           const specs = product.fields
             ? product.fields
-                .filter((field: any) => field.label !== 'Historia')
+                .filter((field: any) => field.label !== "Historia")
                 .map((field: any) => ({
-                  title: field.label,  // ← "Certificação"
-                  description: field.value,  // ← "Produto artesanal certificado..."
+                  title: field.label,
+                  description: field.value,
                 }))
             : [];
-
           setProductSpecs(specs);
         } catch (error) {
           console.error("Failed to fetch product specs:", error);
         }
       };
-
       fetchProductSpecs();
     } catch (error) {
       console.error("Failed to initialize Jumpseller API:", error);
     }
   }, []);
 
+  const productId = initialProductId ?? "32614736";
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <Navbar />
       <Box component="main" sx={{ flexGrow: 1, bgcolor: "#DAD7CD" }}>
-        <ProductDetail sku="GALO-BCL-001" />
-        <ProductSpecifications specifications={productSpecs} />
+        <ProductDetail productId={productId} />
+        <ProductSpecifications data={productSpecs} />
       </Box>
       <Footer />
     </Box>
