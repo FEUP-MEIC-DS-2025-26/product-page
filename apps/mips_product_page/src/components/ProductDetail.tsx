@@ -7,10 +7,13 @@ import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { JumpsellerReview } from '../services/jumpsellerApi';
 
-// Define a URL base dependendo do ambiente
+// Se o ficheiro de tipos estiver noutro lado, importa-o. 
+// Caso contrário, defino aqui para garantir que compila:
+import { JumpsellerReview } from '../services/jumpsellerApi'; 
+
 export const API_BASE_URL = "https://api.madeinportugal.store/api";
+
 // --- TYPES ---
 type ProductSpecification = {
   title: string;
@@ -37,13 +40,14 @@ type ProductFromApi = {
 };
 
 // --- HELPERS ---
+
 const stripHtmlTags = (html: string): string => {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   return doc.body.textContent || '';
 };
 
 const calculateAverageRating = (reviews: JumpsellerReview[]): number => {
-  if (reviews.length === 0) return 0;
+  if (!reviews || reviews.length === 0) return 0;
   const validReviews = reviews.filter(review => {
     const rating = Number(review.rating);
     return !isNaN(rating) && rating >= 1 && rating <= 5;
@@ -89,6 +93,7 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any, reviews: JumpsellerRevie
   };
 };
 
+// Renderizador de estrelas SVG (Visual do Design Solicitado)
 const renderStars = (score: number) =>
   Array.from({ length: 5 }, (_, i) => {
     const id = `star-half-clip-${i}`;
@@ -108,7 +113,7 @@ const renderStars = (score: number) =>
   });
 
 // --- COMPONENT PRINCIPAL ---
-// Alteração Importante:  Aceita productId como prop!
+
 interface ProductDetailProps {
   productId?: string | number;
 }
@@ -119,12 +124,13 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Estado para alternar fonte (Jumpseller API vs Database)
   const [source, setSource] = useState<'jumpseller' | 'database'>('jumpseller');
 
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
-  // ID de fallback (Galo) se nada for passado
+  // ID de fallback se nenhum for passado (ex: Galo de Barcelos)
   const targetId = productId || 32614736;
 
   const toggleSource = () => {
@@ -133,6 +139,27 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
 
   useEffect(() => {
     let isMounted = true;
+
+    // --- FUNÇÃO AUXILIAR DE RETRY ---
+    // Tenta fazer o fetch 'n' vezes antes de lançar erro
+    const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<Response> => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            // Se for erro 404 (não encontrado), não adianta tentar de novo
+            if (res.status === 404) throw new Error('404 Not Found');
+            throw new Error(`Erro API: ${res.status}`);
+        }
+        return res;
+      } catch (err) {
+        if (retries > 0) {
+          console.warn(`⚠️ Falhou. A tentar de novo em ${delay}ms... (Restam ${retries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return fetchWithRetry(url, retries - 1, delay * 1.5); // Aumenta o tempo de espera a cada tentativa
+        }
+        throw err;
+      }
+    };
 
     const fetchProduct = async () => {
       if (!isMounted) return;
@@ -143,11 +170,16 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
 
       try {
         if (source === 'jumpseller') {
-          const res = await fetch(`${API_BASE_URL}/products/${targetId}`);
+          // ========================================================
+          // MODO JUMPSELLER (COM RETRY AUTOMÁTICO)
+          // ========================================================
           
-          if (!res.ok) throw new Error('Erro ao carregar do Jumpseller Proxy');
+          // Usa o fetchWithRetry em vez do fetch normal
+          const res = await fetchWithRetry(`${API_BASE_URL}/products/${targetId}`);
+          
           const rawData = await res.json();
 
+          // Fetch reviews (opcional, sem retry crítico para não bloquear)
           let reviews: JumpsellerReview[] = [];
           try {
              const revRes = await fetch(`${API_BASE_URL}/products/${targetId}/reviews`);
@@ -160,9 +192,12 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
           }
 
         } else {
+          // ========================================================
+          // MODO DATABASE
+          // ========================================================
           const res = await fetch(`${API_BASE_URL}/products/jumpseller/${targetId}`);
           
-          if (!res.ok) throw new Error('Produto não encontrado na Base de Dados');
+          if (!res.ok) throw new Error('Produto não encontrado na Base de Dados (Sincronize primeiro!)');
           const dbData = await res.json();
 
           if (isMounted) {
@@ -181,26 +216,28 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
     fetchProduct();
 
     return () => { isMounted = false; };
-  }, [source, targetId]); // Recarrega se a Source OU o ID mudarem
+  }, [source, targetId]);
 
+  // Loading State
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', flexDirection: 'column', gap: 3 }}>
         <CircularProgress size={60} thickness={4} sx={{ color: '#344E41' }} />
         <Typography variant="h6" sx={{ color: '#344E41', fontWeight: 500 }}>
-          A carregar...
+          A carregar ({source === 'jumpseller' ? 'API' : 'BD'})...
         </Typography>
       </Box>
     );
   }
 
+  // Error State
   if (error || !product) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh', flexDirection: 'column', gap: 2 }}>
         <Typography variant="h5" color="error" sx={{ fontWeight: 'bold' }}>❌ Erro ({source})</Typography>
         <Typography variant="body1" color="error">{error}</Typography>
         <Button variant="outlined" onClick={toggleSource} sx={{ mt: 2 }}>
-           Tentar outra fonte
+          Tentar mudar para {source === 'jumpseller' ? 'Base de Dados' : 'Jumpseller API'}
         </Button>
       </Box>
     );
@@ -209,6 +246,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
   const photos = product.photos || [];
   const reviewCount = product.reviewCount ?? 0;
 
+  // --- RENDER UI (Estilo "Galo" adaptado) ---
   return (
     <Box sx={{ py: { xs: 2, sm: 3 } }}>
       <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 } }}>
@@ -223,59 +261,112 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
               color: 'white',
               px: 2, py: 0.5, borderRadius: 1, fontWeight: 'bold', cursor: 'pointer',
               boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-              fontSize: '0.8rem'
+              transition: 'transform 0.1s',
+              '&:active': { transform: 'scale(0.95)' },
+              '&:hover': { opacity: 0.9 }
             }}
           >
-            {source === 'jumpseller' ? '⚡ Fonte: API' : '💾 Fonte: BD'} 
+            <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+              {source === 'jumpseller' ? '⚡ Fonte: API (Proxy)' : '💾 Fonte: Base de Dados'} 
+              <span style={{ fontSize: '0.8em' }}>(Clique para mudar)</span>
+            </Typography>
           </Box>
         </Box>
 
-        {/* --- CONTEÚDO PRINCIPAL (LAYOUT ORIGINAL MANTIDO) --- */}
-        <Box sx={{ bgcolor: '#E4E1D6', borderRadius: '24px', p: { xs: 2, sm: 3, md: 4 }, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.12)' }}>
-          <Grid container columnSpacing={{ xs: 2, md: 2 }} rowSpacing={isSmallScreen ? 2 : 0}>
-            {/* FOTOS */}
-            <Grid item xs={12} md={3} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-               <Box sx={{ bgcolor: '#274836', borderRadius: '16px', p: 2, width: '100%', maxWidth: { md: 450 }, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                 <Box sx={{ bgcolor: 'white', borderRadius: '8px', overflow: 'hidden', aspectRatio: '3/4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Box component="img" src={photos[selectedPhotoIndex]?.photo_url || product.mainPhoto?.photo_url} sx={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                 </Box>
-                 {photos.length > 1 && (
-                   <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto' }}>
-                     {photos.map((p, i) => (
-                       <Box key={i} onClick={() => setSelectedPhotoIndex(i)} sx={{ width: 50, height: 50, borderRadius: 1, overflow: 'hidden', border: i === selectedPhotoIndex ? '2px solid #fff' : 'none', cursor: 'pointer' }}>
-                         <Box component="img" src={p.photo_url} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                       </Box>
-                     ))}
-                   </Box>
-                 )}
-               </Box>
+        {/* CONTENT BOX */}
+        <Box sx={{ bgcolor: '#E4E1D6', borderRadius: '24px', p: { xs: 2, sm: 3, md: 4 }, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.12), 0 4px 6px -2px rgba(0,0,0,0.06)' }}>
+          <Grid container columnSpacing={{ xs: 2, md: 2 }} rowSpacing={isSmallScreen ? 2 : 0} sx={{ alignItems: 'strech', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
+            
+            {/* LEFT – IMAGEM */}
+            <Grid item xs={12} md={3} sx={{ display: 'flex', minWidth: 0, height: '100%', justifyContent: 'flex-end' }}>
+              <Box sx={{ bgcolor: '#274836', borderRadius: '16px', p: 2, width: { md: 450 }, height: { md: 550 }, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ bgcolor: 'white', borderRadius: '8px', width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Box component="img" src={photos[selectedPhotoIndex]?.photo_url || product.mainPhoto?.photo_url || '/placeholder.png'} alt={photos[selectedPhotoIndex]?.alt_text || product.title} sx={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e: any) => { e.currentTarget.src = '/placeholder.png'; }} />
+                </Box>
+                {photos.length > 1 && (
+                  <Box sx={{ display: 'flex', gap: 2, mt: 0, justifyContent: 'center', overflowX: 'auto' }}>
+                    {photos.map((p, i) => (
+                      <Box key={i} onClick={() => setSelectedPhotoIndex(i)} sx={{ width: { xs: 60, sm: 60 }, height: { xs: 60, sm: 60 }, flexShrink: 0, borderRadius: 2, overflow: 'hidden', border: i === selectedPhotoIndex ? '2.5px solid #344E41' : '2.5px solid transparent', cursor: 'pointer', bgcolor: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: i === selectedPhotoIndex ? '0 0 0 3px white, 0 0 10px 2px rgba(255,255,255,0.6)' : 'none', transition: 'all 0.18s' }}>
+                        <Box component="img" src={p.photo_url} alt={p.alt_text || product.title} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
             </Grid>
 
-            {/* INFO */}
-            <Grid item xs={12} md={9} sx={{ pl: { md: 3 } }}>
-               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: 2 }}>
-                  <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#344E41' }}>{product.title}</Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 'bold' }}>{Number(product.price).toFixed(2)} €</Typography>
-                  <Box sx={{ display: 'flex', gap: 1 }}>{renderStars(product.avg_score)} <Typography>({reviewCount})</Typography></Box>
-                  
-                  <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                     <Button variant="contained" sx={{ bgcolor: '#344E41', color: 'white', px: 4, py: 1.5, borderRadius: '12px' }}>Comprar</Button>
+            {/* RIGHT – INFO */}
+            <Grid item xs={12} md={9} sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', pl: { md: 3 }, flex: 1 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: 3 }}>
+                
+                {/* Header Info */}
+                <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1, gap: 2 }}>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="h3" component="h1" sx={{ fontSize: { xs: '2rem', sm: '2.25rem', lg: '2.5rem' }, fontWeight: 'bold', color: '#344E41', lineHeight: 1.1, wordBreak: 'break-word' }}>
+                        {product.title}
+                      </Typography>
+                      {product.brand && <Typography variant="subtitle1" sx={{ color: '#588157', fontWeight: 600, fontSize: { xs: '1.05rem', sm: '1.15rem' }, mt: 0.5, fontStyle: 'italic' }}>{product.brand}</Typography>}
+                    </Box>
+                    <IconButton aria-label="Adicionar à wishlist" sx={{ p: 1, '&:hover': { transform: 'scale(1.05)', '& svg': { fill: '#344E41' } }, flexShrink: 0 }}>
+                      <svg width="40" height="40" fill="none" stroke="#344E41" strokeWidth={2.2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                    </IconButton>
                   </Box>
-               </Box>
+
+                  {/* Storytelling Curto (Scrollable se necessário) */}
+                  <Box sx={{ maxHeight: 400, overflowY: 'auto', mb: 1.5, pr: 1 }}>
+                    <Typography variant="body2" sx={{ fontSize: { xs: '1.05rem', sm: '1.12rem' }, color: 'black', lineHeight: 1.7 }}>
+                      {product.storytelling || product.description}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Price & Rating */}
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                    <Typography variant="h3" sx={{ fontSize: { xs: '2rem', sm: '2.25rem', lg: '2.5rem' }, fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {Number(product.price).toFixed(2)} €
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', flexGrow: 1 }}>
+                      {reviewCount > 0 ? (
+                        <>
+                          <Box sx={{ display: 'flex', gap: 0.25 }}>{renderStars(product.avg_score)}</Box>
+                          <Typography variant="body1" sx={{ fontSize: { xs: '1rem', sm: '1.1rem' }, fontWeight: 500, color: '#3A5A40' }}>
+                            {product.avg_score.toFixed(1)} ({reviewCount} avaliaç{reviewCount > 1 ? 'ões' : 'ão'})
+                          </Typography>
+                        </>
+                      ) : (
+                        <Typography variant="body1" sx={{ fontSize: { xs: '1rem', sm: '1.1rem' }, fontWeight: 500, color: '#999' }}>Sem avaliações</Typography>
+                      )}
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* Actions */}
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, width: '100%', alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-start' } }}>
+                  <Button variant="contained" sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: 160, bgcolor: '#344E41', color: 'white', p: { xs: '10px 20px', sm: '14px 28px' }, borderRadius: '12px', fontWeight: 'bold', fontSize: { xs: '0.98rem', sm: '1.05rem' }, '&:hover': { bgcolor: '#A3B18A', color: 'black' }, gap: 1.5, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)' }}>
+                    <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg> Comprar
+                  </Button>
+                  <Button variant="contained" sx={{ width: { xs: '100%', sm: 'auto' }, bgcolor: '#588157', color: 'white', ml: { sm: 2 }, p: { xs: '10px 20px', sm: '14px 28px' }, borderRadius: '12px', fontWeight: 'bold', fontSize: { xs: '0.98rem', sm: '1.05rem' }, '&:hover': { bgcolor: '#A3B18A', color: 'black' }, gap: 1.5, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)' }}>
+                    <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> Falar com o Vendedor
+                  </Button>
+                </Box>
+              </Box>
             </Grid>
           </Grid>
 
-          {/* HISTÓRIA */}
-          <Box sx={{ bgcolor: '#F5F5F5', borderRadius: '16px', mt: 4, p: 3 }}>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#344E41', mb: 1 }}>História do Produto</Typography>
-            <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>{product.description}</Typography>
+          {/* História Completa (Se houver descrição longa diferente do storytelling) */}
+          <Box sx={{ bgcolor: '#F5F5F5', borderRadius: '16px', mt: 4, p: { xs: 2, sm: 3 } }}>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#344E41', mb: 1, fontSize: { xs: '1.2rem', sm: '1.35rem' } }}>História do Produto</Typography>
+            <Typography variant="body1" sx={{ fontSize: { xs: '1.02rem', sm: '1.1rem' }, fontWeight: 600, color: 'black', whiteSpace: 'pre-line', lineHeight: 1.7 }}>
+              {product.description}
+            </Typography>
           </Box>
         </Box>
+        <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
       </Box>
 
-      {/* OTIMIZAÇÃO: Passamos os dados diretamente para as Specs. 
-         Não fazemos fetch de novo!
-      */}
+      {/* COMPONENTE DE ESPECIFICAÇÕES (Otimizado: Recebe dados via Props) */}
       {product.specifications && product.specifications.length > 0 && (
          <ProductSpecifications data={product.specifications} />
       )}
@@ -283,22 +374,28 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
   );
 }
 
-// Componente de Especificações alterado para receber DADOS, não ID.
+// --- Componente de Especificações ---
+// Mantido o estilo visual, mas recebe 'data' em vez de fazer fetch
 export function ProductSpecifications({ data }: { data: ProductSpecification[] }) {
   if (!data || !data.length) return null;
 
   return (
     <>
-      <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 }, display: 'flex', flexDirection: 'column', gap: 1.5, pb: 4, mt: 4 }}>
+      <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 }, display: 'flex', flexDirection: 'column', gap: 1.5, pb: 4 }}>
         {data.map((spec, index) => (
           <React.Fragment key={index}>
             <Box sx={{ bgcolor: '#E4E1D6', borderRadius: '16px', p: { xs: 2.5, sm: 3, md: 3.5 } }}>
-              <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>{spec.title}</Typography>
-              <Typography variant="body1">{spec.description}</Typography>
+              <Typography variant="h4" sx={{ fontSize: { xs: '1.3rem', sm: '1.6rem' }, fontWeight: 'bold', color: 'black', mb: 1.25 }}>{spec.title}</Typography>
+              <Typography variant="body1" sx={{ color: 'black', fontSize: { xs: '1.05rem', sm: '1.12rem' }, lineHeight: 1.6, whiteSpace: 'pre-line', pl: { xs: 1, sm: 2 } }}>
+                {spec.description}
+              </Typography>
             </Box>
+            {/* Divisor entre specs, se quiseres estilo idêntico ao original */}
+            {index < data.length - 1 && <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />}
           </React.Fragment>
         ))}
       </Box>
+      <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
     </>
   );
 }
