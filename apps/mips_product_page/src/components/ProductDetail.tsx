@@ -252,6 +252,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
       <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 } }}>
         
         {/* TOGGLE BADGE */}
+        {/* COMENTADO PARA NÃO APARECER NA UI
         <Box sx={{ mb: 2, textAlign: 'center' }}>
           <Box 
             onClick={toggleSource}
@@ -271,7 +272,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
               <span style={{ fontSize: '0.8em' }}>(Clique para mudar)</span>
             </Typography>
           </Box>
-        </Box>
+        </Box>*/}
 
         {/* CONTENT BOX */}
         <Box sx={{ bgcolor: '#E4E1D6', borderRadius: '24px', p: { xs: 2, sm: 3, md: 4 }, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.12), 0 4px 6px -2px rgba(0,0,0,0.06)' }}>
