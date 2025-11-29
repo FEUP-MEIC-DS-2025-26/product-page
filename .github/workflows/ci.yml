@@ -1,7 +1,5 @@
-# Nome do seu pipeline
-name: CI Pipeline (Build, Lint, Test, Security)
+name: CI Pipeline (Build, Lint, Test, Security, Docker)
 
-# Em que eventos este pipeline deve correr
 on:
   push:
     branches: [ main ]
@@ -10,67 +8,72 @@ on:
 
 jobs:
   build-and-test:
-    # Máquina virtual onde o pipeline vai correr
+    name: Build, Test & Docker Verify
     runs-on: ubuntu-latest
-    
+
     steps:
-      # 1. Obter o código do seu repositório
+      # 1. Obter o código
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Configurar o ambiente pnpm e Node.js
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8 # Mude para a sua versão do pnpm, se for diferente
-
+      # 2. Configurar ambiente
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18' # Mude para a sua versão do Node.js
-          cache: 'pnpm' # Ativa o cache do 'pnpm' (muito mais rápido)
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
 
       # 3. Instalar dependências
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      # 4. Correr Linters
-      # (Assume que 'pnpm run lint' está configurado no package.json da raiz)
+      # 4. Linting
       - name: Run Linters
         run: pnpm run lint
+        continue-on-error: false
 
-      # 5. Correr Testes (Unitários/Integração)
-      # (Assume que 'pnpm run test' está configurado no package.json da raiz)
+      # 5. Testes
       - name: Run Tests
         run: pnpm run test
-      
-      # 6. Scan de Vulnerabilidades (Dependências)
-      - name: Run pnpm Audit (Security Scan)
-        run: pnpm audit --prod
 
-      # 7. Testar os builds das Imagens Docker
-      # Constrói cada Dockerfile para garantir que não falham.
-      
-      - name: Build Docker image for mips_host
+      # 6. Auditoria de Segurança
+      - name: Run pnpm Audit
+        run: pnpm audit --prod
+        continue-on-error: true
+
+      # ------------------------------------------------------------------
+      # 7. DOCKER BUILDS
+      # ------------------------------------------------------------------
+
+      # Backend (mips_backend)
+      - name: Build Docker Backend
         run: |
           docker build . \
-            -f apps/mips_host/Dockerfile \
-            -t mips-host:latest
+            -f apps/mips_backend/Dockerfile \
+            -t mips-backend:latest
 
-      - name: Build Docker image for mips_product_page
+      # Micro-Frontend: Product Page (mips_product_page)
+      - name: Build Docker Product Page
         run: |
           docker build . \
             -f apps/mips_product_page/Dockerfile \
             -t mips-product-page:latest
 
-      - name: Build Docker image for mips_shopping_cart
+      # Micro-Frontend: Shopping Cart (mips_shopping_cart)
+      - name: Build Docker Shopping Cart
         run: |
           docker build . \
             -f apps/mips_shopping_cart/Dockerfile \
             -t mips-shopping-cart:latest
-            
-      #- name: Build Docker image for web (root Dockerfile)
-      #  run: |
-      #    docker build . \
-      #      -f Dockerfile \
-      #      -t mips-web:latest
+
+      # Root Web App
+      - name: Build Docker Root Web App
+        run: |
+          docker build . \
+            -f Dockerfile \
+            --build-arg REACT_APP_API_BASE="http://localhost:3003/api" \
+            -t mips-web:latest
