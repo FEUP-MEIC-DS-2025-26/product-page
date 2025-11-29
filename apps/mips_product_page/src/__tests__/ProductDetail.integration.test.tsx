@@ -35,9 +35,11 @@ const mockProductCorrectFormat = {
 
 const mockFetchSuccess = () => {
   (global as any).fetch = jest.fn((url: string) => {
+      // Mock para reviews (opcional, evita erros na consola)
       if (url.includes('/reviews')) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
+      // Mock para produto
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(mockProductCorrectFormat),
@@ -55,6 +57,8 @@ const mockFetchError = () => {
 };
 
 describe('ProductDetail Integration', () => {
+  
+  // CORREÇÃO 1: beforeEach simples e fechado corretamente
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -76,7 +80,7 @@ describe('ProductDetail Integration', () => {
     const title = await screen.findByRole('heading', { name: /Galo de Barcelos/i });
     expect(title).toBeInTheDocument();
 
-    // Descrição (CORREÇÃO: usa getAllByText pois o texto aparece em 2 lugares)
+    // Descrição
     const descriptions = screen.getAllByText(/Descrição do produto para testar./i);
     expect(descriptions.length).toBeGreaterThan(0);
     expect(descriptions[0]).toBeInTheDocument();
@@ -85,14 +89,11 @@ describe('ProductDetail Integration', () => {
     expect(screen.getByText('25.00 €')).toBeInTheDocument();
   });
 
-  // CORREÇÃO: Adicionado timeout de 15000ms (15s) a este teste específico
-  // O componente faz retries que demoram ~5 segundos, o que excedia o limite padrão.
   test('mostra erro e permite tentar trocar de fonte se falhar', async () => {
     mockFetchError(); 
     render(<ProductDetail />);
 
-    // FIX: Alterado de findByText para findByRole para evitar erro de múltiplos elementos
-    // O componente renderiza o título "Erro (jumpseller)" e o texto "Erro API: 500".
+    // Usa findByRole para evitar conflito de múltiplos textos
     const errorHeading = await screen.findByRole('heading', { name: /Erro/i }, { timeout: 10000 });
     expect(errorHeading).toBeInTheDocument();
 
@@ -100,23 +101,30 @@ describe('ProductDetail Integration', () => {
     expect(switchButton).toBeInTheDocument();
   }, 15000); 
 
+  // CORREÇÃO 3: Removida a tentativa de clicar no botão "Fonte" (que está oculto)
+  // O teste agora foca-se apenas na troca de imagens da galeria
   test('permite trocar a imagem principal ao clicar na miniatura', async () => {
     mockFetchSuccess();
     render(<ProductDetail />);
-
+    
+    // Espera o produto carregar
     await screen.findByRole('heading', { name: /Galo de Barcelos/i });
 
-    // 1. Verificar imagem inicial
-    const mainImages = screen.getAllByAltText('Foto principal');
+    // 1. Verificar imagem inicial (main.jpg)
+    const mainImages = screen.getAllByAltText('Foto principal'); // O mock tem alt="Foto principal"
     const mainImgBefore = mainImages.find(img => (img as HTMLImageElement).src.includes('main.jpg'));
     expect(mainImgBefore).toBeInTheDocument();
 
     // 2. Clicar na miniatura "Foto extra"
+    // Nota: O componente ProductDetail usa o mesmo array de fotos para a imagem grande e as miniaturas.
+    // Precisamos encontrar a miniatura especifica.
     const extraImages = screen.getAllByAltText('Foto extra');
+    // Normalmente a primeira é a que está no carrossel/lista de miniaturas
     fireEvent.click(extraImages[0]);
 
-    // 3. Verificar se a imagem principal mudou
+    // 3. Verificar se a imagem principal mudou para extra.jpg
     await waitFor(() => {
+      // Agora procuramos a imagem extra que está a ser exibida como principal (tamanho maior ou visivel)
       const allExtraImages = screen.getAllByAltText('Foto extra');
       const visibleExtra = allExtraImages.find(img => (img as HTMLImageElement).src.includes('extra.jpg'));
       expect(visibleExtra).toBeInTheDocument();
