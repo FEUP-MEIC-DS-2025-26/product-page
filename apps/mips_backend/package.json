@@ -8,6 +8,7 @@
     "start": "node src/server.js"
   },
   "dependencies": {
+    "@google-cloud/pubsub": "^5.2.0",
     "@prisma/client": "^6.19.0",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
