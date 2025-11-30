@@ -5,7 +5,7 @@ FROM base AS builder-web
 WORKDIR /app
 
 # Copiar package + lock e instalar *todas* as deps (dev + prod)
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml ./
 # força NODE_ENV=development apenas para a instalação (assegura devDeps)
 RUN NODE_ENV=development pnpm install --frozen-lockfile --ignore-scripts || \
     NODE_ENV=development pnpm install --ignore-scripts --force

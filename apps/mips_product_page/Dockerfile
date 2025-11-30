@@ -11,7 +11,7 @@ RUN apk add --no-cache libc6-compat curl bash
 FROM base AS prod-deps
 WORKDIR /app
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts || pnpm install --prod --ignore-scripts --force
 
 # ===== builder =====
@@ -26,7 +26,7 @@ ENV PATH=$PATH:/root/.local/share/pnpm/global/5/node_modules/.bin
 COPY . .
 
 # garantir que os ficheiros de workspace/lock estão no local (seguro repetir)
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml ./
 
 # instalar deps no workspace root (hoisting) — necessário para rsbuild e plugins
 RUN NODE_ENV=development pnpm -w install --frozen-lockfile --ignore-scripts --shamefully-hoist || \
