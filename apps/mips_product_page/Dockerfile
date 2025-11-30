@@ -68,7 +68,7 @@ RUN mkdir -p apps/mips_product_page/dist \
  && mkdir -p /app/node_modules/.prisma \
  && mkdir -p /app/prisma
 
-# ===== runner (Imagem Final) =====
+# ===== runner (Imagem Final Otimizada) =====
 FROM node:22-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache libc6-compat curl
@@ -77,19 +77,22 @@ ENV PORT=3000
 RUN npm install -g serve@14
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-# Copiar node_modules limpos (apenas produção) do stage prod-deps
-COPY --from=prod-deps /app/node_modules ./node_modules
+# [CORREÇÃO] Usar --chown=nextjs:nodejs DIRETAMENTE no COPY
+# Isto evita correr o comando lento "chown -R" depois
 
-# Copiar os ficheiros construídos do stage builder
-COPY --from=builder /app/apps/mips_product_page/dist ./dist
-COPY --from=builder /app/apps/mips_product_page/public ./public
-COPY --from=builder /app/apps/mips_product_page/.next ./.next
+# Copiar node_modules de produção
+COPY --chown=nextjs:nodejs --from=prod-deps /app/node_modules ./node_modules
 
-# Copiar Prisma assets
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/prisma ./prisma
+# Copiar os artefactos da build
+COPY --chown=nextjs:nodejs --from=builder /app/apps/mips_product_page/dist ./dist
+COPY --chown=nextjs:nodejs --from=builder /app/apps/mips_product_page/public ./public
+COPY --chown=nextjs:nodejs --from=builder /app/apps/mips_product_page/.next ./.next
 
-RUN chown -R nextjs:nodejs /app
+# Copiar Prisma
+COPY --chown=nextjs:nodejs --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --chown=nextjs:nodejs --from=builder /app/prisma ./prisma
+
+# Remover o comando "RUN chown -R..." pois o COPY já tratou disso
 USER nextjs
 EXPOSE 3000
 
