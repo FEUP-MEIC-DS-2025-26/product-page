@@ -1,0 +1,15 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-web:latest'
+      - '-f'
+      - 'apps/mips_product_page/Dockerfile'  # O segredo: Aponta para o ficheiro certo
+      - '--build-arg'
+      - 'REACT_APP_API_BASE=${_API_URL}'     # Recebe a variável do GitHub Actions
+      - '.'                                    # O contexto é a RAIZ
+images:
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-web:latest'
+substitutions:
+    _API_URL: '' # Placeholder para evitar erros se não for passado

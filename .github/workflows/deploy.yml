@@ -46,11 +46,14 @@ jobs:
 
       - name: Deploy Frontend
         run: |
+          # 1. BUILD (Usando o novo ficheiro de config)
           gcloud builds submit \
-            --tag=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
-            apps/mips_product_page \
+            --config=cloudbuild.web.yaml \
+            --substitutions=_API_URL=${{ env.API_URL }} \
+            . \
             --project=${{ env.PROJECT_ID }}
 
+          # 2. DEPLOY (Cloud Run)
           gcloud run deploy t2-web \
             --image=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
             --region=${{ env.REGION }} \
