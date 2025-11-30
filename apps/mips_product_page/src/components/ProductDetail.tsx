@@ -136,7 +136,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
   // ID de fallback se nenhum for passado (ex: Galo de Barcelos)
-  const targetId = productId ||  32614736;
+  const targetId = productId ||  32863784;
 
   const toggleSource = () => {
     setSource(prev => prev === 'jumpseller' ? 'database' : 'jumpseller');

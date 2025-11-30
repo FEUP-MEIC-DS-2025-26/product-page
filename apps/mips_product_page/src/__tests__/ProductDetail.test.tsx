@@ -41,7 +41,7 @@ const mockFetch = global.fetch as jest.Mock;
 
 // 5. Define mock data
 const mockApiProduct = {
-  id: 32614736,
+  id: 32863784,
   name: 'Galo de Barcelos (API)',
   description: 'A beautiful rooster from the API.',
   price: 30.0,
@@ -120,7 +120,7 @@ describe('ProductDetail', () => {
     expect(mockFetch).not.toHaveBeenCalled();
     
     // Check that the API was called
-    expect(mockGetProduct).toHaveBeenCalledWith(32614736);
+    expect(mockGetProduct).toHaveBeenCalledWith(32863784);
   });
 
   test('falls back to database if Jumpseller API fails', async () => {
@@ -151,7 +151,7 @@ describe('ProductDetail', () => {
     expect(mockGetProduct).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3002/products/jumpseller/32614736'
+      'http://localhost:3002/products/jumpseller/32863784'
     );
   });
 
