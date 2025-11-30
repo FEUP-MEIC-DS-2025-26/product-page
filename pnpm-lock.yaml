@@ -223,10 +223,10 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5
       '@types/react':
-        specifier: ^18.3.11
+        specifier: ^18.3.26
         version: 18.3.26
       '@types/react-dom':
-        specifier: ~18.3.1
+        specifier: ~18.3.7
         version: 18.3.7(@types/react@18.3.26)
       tsx:
         specifier: ^4.20.6
@@ -3443,12 +3443,6 @@ packages:
     resolution: {integrity: sha512-ZsJzA5thDQMSQO788d7IocwwQbI8B5OPzmqNvpf3NY/+MHDAS759Wo0gd2WQeXYt5AAAQjzcrTVC6SKCuYgoCQ==}
     dependencies:
       undici-types: 6.21.0
-    dev: true
-
-  /@types/node@24.10.1:
-    resolution: {integrity: sha512-GNWcUTRBgIRJD5zj+Tq0fKOJ5XZajIiBroOF0yvj2bSU1WvNdYS/dn9UxwsujGW4JX06dnHyjV2y9rRaybH0iQ==}
-    dependencies:
-      undici-types: 7.16.0
     dev: true
 
   /@types/parse-json@4.0.2:
@@ -7434,7 +7428,7 @@ packages:
     resolution: {integrity: sha512-7vuh85V5cdDofPyxn58nrPjBktZo0u9x1g8WtjQol+jZDaE+fhN+cIvTj11GndBnMnyfrUOG1sZQxCdjKh+DKg==}
     engines: {node: '>= 10.13.0'}
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 20.19.25
       merge-stream: 2.0.0
       supports-color: 8.1.1
     dev: true
@@ -9871,10 +9865,6 @@ packages:
 
   /undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
-    dev: true
-
-  /undici-types@7.16.0:
-    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
     dev: true
 
   /universalify@0.1.2:
