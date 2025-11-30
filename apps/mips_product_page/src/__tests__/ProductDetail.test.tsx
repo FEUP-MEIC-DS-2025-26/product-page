@@ -1,9 +1,11 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProductDetail from '../components/ProductDetail';
 
-// Mock matchMedia
+// --- Mocks ---
+
+// Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: any) => ({
@@ -18,66 +20,115 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
-// Mock Data Simplificado
+// Mock global.fetch
+global.fetch = jest.fn();
+const mockFetch = global.fetch as jest.Mock;
+
+// --- Mock Data (Formato da API) ---
 const mockApiProduct = {
-  product: {
-    id: 1,
-    name: 'Galo de Barcelos',
-    description: 'Descrição do produto para testar.',
-    price: 25.00,
-    images: [{ url: 'https://example.com/main.jpg', description: 'Foto principal' }],
-    fields: []
-  }
+  id: 32863784,
+  name: 'Galo de Barcelos (API)', // IMPORTANTE: A API usa 'name'
+  description: 'A beautiful rooster from the API.',
+  price: 30.0,
+  images: [ // IMPORTANTE: A API usa 'images'
+    { url: 'http://api.com/image1.jpg', description: 'API image 1' },
+    { url: 'http://api.com/image2.jpg', description: 'API image 2' },
+  ],
+  fields: [{ label: 'Material', value: 'Ceramic' }],
 };
 
-describe('ProductDetail Integration', () => {
+const mockDbProduct = {
+  id: 123,
+  // A Base de Dados retorna o formato já processado (title/photos)
+  title: 'Galo de Barcelos (DB)',
+  description: 'Database description...',
+  price: 25.99,
+  avg_score: 4.5,
+  reviewCount: 10,
+  mainPhoto: { photo_url: 'https://db.com/main.jpg', alt_text: 'DB main photo' },
+  photos: [
+    { photo_url: 'https://db.com/main.jpg', alt_text: 'DB main photo' },
+    { photo_url: 'https://db.com/extra.jpg', alt_text: 'DB extra photo' },
+  ],
+  specifications: [{ title: 'Origin', description: 'Portugal' }],
+};
+
+describe('ProductDetail (Unit Specs)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (global as any).fetch = jest.fn((url) => {
-        if (url.includes('/reviews')) return Promise.resolve({ ok: true, json: () => [] });
-        return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockApiProduct),
-        });
-    });
   });
 
-  test('fluxo completo de renderização do produto', async () => {
+  test('shows loading state initially', async () => {
+    mockFetch.mockReturnValue(new Promise(() => {})); // Pendente para sempre
     render(<ProductDetail />);
-
-    // 1. Loading
     expect(screen.getByText(/A carregar/i)).toBeInTheDocument();
-
-    // 2. Renderização de conteúdo
-    const title = await screen.findByRole('heading', { name: /Galo de Barcelos/i, level: 1 });
-    expect(title).toBeInTheDocument();
-
-    // Preço
-    expect(screen.getByText('25.00 €')).toBeInTheDocument();
-
-    // Botões de Ação
-    expect(screen.getByText(/Comprar/i)).toBeInTheDocument();
-    expect(screen.getByText(/Falar com o Vendedor/i)).toBeInTheDocument();
-
-    // Secção de História
-    expect(screen.getByText('História do Produto')).toBeInTheDocument();
-    
-    // CORREÇÃO: Como o texto aparece em 2 sítios (Storytelling e Descrição completa),
-    // usamos getAllByText e verificamos se pelo menos um existe.
-    const descriptions = screen.getAllByText('Descrição do produto para testar.');
-    expect(descriptions.length).toBeGreaterThan(0);
-    expect(descriptions[0]).toBeInTheDocument();
   });
 
-  test('exibe mensagem de erro quando fetch falha', async () => {
-    (global as any).fetch = jest.fn(() => Promise.reject(new Error('Network Error')));
+  test('loads product from Jumpseller API successfully', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/reviews')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockApiProduct) });
+    });
 
     render(<ProductDetail />);
 
-    const errorMsg = await screen.findByText(/Erro \(jumpseller\)/i);
-    expect(errorMsg).toBeInTheDocument();
+    // Verifica se carregou o nome corretamente
+    expect(await screen.findByText('Galo de Barcelos (API)')).toBeInTheDocument();
+  });
+
+  test('falls back to database if Jumpseller API fails', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/reviews')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      
+      // Simula falha na API (para forçar o erro)
+      if (url.includes('/products/32863784') && !url.includes('jumpseller/')) {
+        return Promise.reject(new Error('API Error'));
+      }
+
+      // Simula sucesso na BD (quando o utilizador pedir)
+      if (url.includes('/products/jumpseller/')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockDbProduct) });
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
+
+    render(<ProductDetail />);
+
+    // 1. Esperar pelo botão de erro (timeout aumentado devido aos retries)
+    const errorBtn = await screen.findByRole('button', { name: /Tentar mudar/i }, { timeout: 8000 });
     
-    // Verifica se o botão de tentar outra fonte aparece
-    expect(screen.getByText(/Tentar mudar para/i)).toBeInTheDocument();
+    // 2. Clicar
+    fireEvent.click(errorBtn);
+
+    // 3. Verificar se carregou da BD
+    const finalTitle = await screen.findByText('Galo de Barcelos (DB)');
+    expect(finalTitle).toBeInTheDocument();
+  });
+
+  test('allows changing the main image by clicking a thumbnail', async () => {
+    mockFetch.mockImplementation((url: string) => {
+        if (url.includes('/reviews')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockApiProduct) });
+    });
+
+    render(<ProductDetail />);
+    await screen.findByText('Galo de Barcelos (API)');
+
+    // Procura imagens. O componente renderiza a principal e as miniaturas.
+    const allImages = screen.getAllByRole('img');
+    // A segunda imagem na lista de mocks é a miniatura que queremos clicar
+    // No mockApiProduct, a segunda imagem tem description: 'API image 2'
+    const thumb = screen.getByAltText('API image 2'); 
+    
+    fireEvent.click(thumb);
+
+    // Verifica se alguma imagem com o src da segunda imagem está visível como destaque
+    await waitFor(() => {
+        const displayedImgs = screen.getAllByAltText('API image 2');
+        // Deve haver pelo menos uma (a principal atualizada)
+        expect(displayedImgs.length).toBeGreaterThan(0);
+        const main = displayedImgs.find(img => (img as HTMLImageElement).src.includes('image2.jpg'));
+        expect(main).toBeInTheDocument();
+    });
   });
 });

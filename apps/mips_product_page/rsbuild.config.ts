@@ -8,4 +8,10 @@ export default defineConfig({
   server: {
     port: 3001,
   },
+  // --- A ALTERAÇÃO IMPORTANTE ESTÁ AQUI EM BAIXO ---
+  output: {
+    // 'auto' faz com que o Rsbuild detete automaticamente o domínio onde está a correr.
+    // Isto resolve problemas de caminhos errados (404) ao carregar scripts na Cloud.
+    assetPrefix: 'auto',
+  },
 });

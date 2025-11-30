@@ -7,13 +7,14 @@ import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { getJumpsellerApi, JumpsellerReview } from '../services/jumpsellerApi';
 
-// Define a URL base dependendo do ambiente
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? 'http://localhost:3103/api' 
-  : 'https://t2-api-34ootpkhva-ew.a.run.app/api';
+// Se o ficheiro de tipos estiver noutro lado, importa-o. 
+// Caso contrário, defino aqui para garantir que compila:
+import { JumpsellerReview } from '../services/jumpsellerApi'; 
 
+export const API_BASE_URL = "https://api.madeinportugal.store/api";
+
+// --- TYPES ---
 type ProductSpecification = {
   title: string;
   description: string;
@@ -38,7 +39,7 @@ type ProductFromApi = {
   brand?: string | null;
 };
 
-const GALO_PRODUCT_ID = 32614736;
+// --- HELPERS ---
 
 const stripHtmlTags = (html: string): string => {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -46,7 +47,7 @@ const stripHtmlTags = (html: string): string => {
 };
 
 const calculateAverageRating = (reviews: JumpsellerReview[]): number => {
-  if (reviews.length === 0) return 0;
+  if (!reviews || reviews.length === 0) return 0;
   const validReviews = reviews.filter(review => {
     const rating = Number(review.rating);
     return !isNaN(rating) && rating >= 1 && rating <= 5;
@@ -56,7 +57,6 @@ const calculateAverageRating = (reviews: JumpsellerReview[]): number => {
   return Math.round((sum / validReviews.length) * 10) / 10;
 };
 
-// Mapeamento Jumpseller -> App
 const mapJumpsellerToProduct = (jumpsellerProduct: any, reviews: JumpsellerReview[]): ProductFromApi => {
   const product = jumpsellerProduct.product || jumpsellerProduct;
   const customFieldsSpecs = product.fields
@@ -93,6 +93,7 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any, reviews: JumpsellerRevie
   };
 };
 
+// Renderizador de estrelas SVG (Visual do Design Solicitado)
 const renderStars = (score: number) =>
   Array.from({ length: 5 }, (_, i) => {
     const id = `star-half-clip-${i}`;
@@ -111,17 +112,26 @@ const renderStars = (score: number) =>
     );
   });
 
-export default function ProductDetail() {
+// --- COMPONENT PRINCIPAL ---
+
+interface ProductDetailProps {
+  productId?: string | number;
+}
+
+export default function ProductDetail({ productId }: ProductDetailProps) {
   const [product, setProduct] = useState<ProductFromApi | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Initial state: Database (since it's synced now) or Jumpseller depending on preference
+  // Estado para alternar fonte (Jumpseller API vs Database)
   const [source, setSource] = useState<'jumpseller' | 'database'>('jumpseller');
 
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
+
+  // ID de fallback se nenhum for passado (ex: Galo de Barcelos)
+  const targetId = productId || 32863784;
 
   const toggleSource = () => {
     setSource(prev => prev === 'jumpseller' ? 'database' : 'jumpseller');
@@ -130,51 +140,68 @@ export default function ProductDetail() {
   useEffect(() => {
     let isMounted = true;
 
+    // --- FUNÇÃO AUXILIAR DE RETRY ---
+    // Tenta fazer o fetch 'n' vezes antes de lançar erro
+    const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<Response> => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            // Se for erro 404 (não encontrado), não adianta tentar de novo
+            if (res.status === 404) throw new Error('404 Not Found');
+            throw new Error(`Erro API: ${res.status}`);
+        }
+        return res;
+      } catch (err) {
+        if (retries > 0) {
+          console.warn(`⚠️ Falhou. A tentar de novo em ${delay}ms... (Restam ${retries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return fetchWithRetry(url, retries - 1, delay * 1.5); // Aumenta o tempo de espera a cada tentativa
+        }
+        throw err;
+      }
+    };
+
     const fetchProduct = async () => {
       if (!isMounted) return;
       setLoading(true);
       setError(null);
       
-      console.log(`🔄 Fetching product using source: ${source.toUpperCase()}`);
+      console.log(`🔄 Fetching product ${targetId} using source: ${source.toUpperCase()}`);
 
       try {
         if (source === 'jumpseller') {
           // ========================================================
-          // MODO JUMPSELLER (PROXY)
+          // MODO JUMPSELLER (COM RETRY AUTOMÁTICO)
           // ========================================================
-          // Tenta primeiro o Proxy direto (que vai à API Jumpseller)
-          const res = await fetch(`${API_BASE_URL}/products/${GALO_PRODUCT_ID}`);
           
-          if (!res.ok) throw new Error('Erro ao carregar do Jumpseller Proxy');
+          // Usa o fetchWithRetry em vez do fetch normal
+          const res = await fetchWithRetry(`${API_BASE_URL}/products/${targetId}`);
+          
           const rawData = await res.json();
 
-          // Fetch reviews
+          // Fetch reviews (opcional, sem retry crítico para não bloquear)
           let reviews: JumpsellerReview[] = [];
           try {
-             const revRes = await fetch(`${API_BASE_URL}/products/${GALO_PRODUCT_ID}/reviews`);
+             const revRes = await fetch(`${API_BASE_URL}/products/${targetId}/reviews`);
              if (revRes.ok) reviews = await revRes.json();
           } catch (e) { console.warn('Reviews error', e); }
 
           if (isMounted) {
             const mapped = mapJumpsellerToProduct(rawData, reviews);
             setProduct(mapped);
-            console.log('✅ Loaded from Jumpseller Proxy');
           }
 
         } else {
           // ========================================================
-          // MODO DATABASE (POSTGRES)
+          // MODO DATABASE
           // ========================================================
-          // Tenta a rota específica da Base de Dados
-          const res = await fetch(`${API_BASE_URL}/products/jumpseller/${GALO_PRODUCT_ID}`);
+          const res = await fetch(`${API_BASE_URL}/products/jumpseller/${targetId}`);
           
-          if (!res.ok) throw new Error('Produto não encontrado na Base de Dados (Faça sync!)');
+          if (!res.ok) throw new Error('Produto não encontrado na Base de Dados (Sincronize primeiro!)');
           const dbData = await res.json();
 
           if (isMounted) {
-            // O Backend já deve retornar a estrutura correta, mas por segurança tipamos aqui
             setProduct(dbData as ProductFromApi); 
-            console.log('✅ Loaded from Database');
           }
         }
 
@@ -189,8 +216,9 @@ export default function ProductDetail() {
     fetchProduct();
 
     return () => { isMounted = false; };
-  }, [source]); // <--- Re-executa quando a 'source' muda
+  }, [source, targetId]);
 
+  // Loading State
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', flexDirection: 'column', gap: 3 }}>
@@ -202,6 +230,7 @@ export default function ProductDetail() {
     );
   }
 
+  // Error State
   if (error || !product) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh', flexDirection: 'column', gap: 2 }}>
@@ -217,11 +246,13 @@ export default function ProductDetail() {
   const photos = product.photos || [];
   const reviewCount = product.reviewCount ?? 0;
 
+  // --- RENDER UI (Estilo "Galo" adaptado) ---
   return (
     <Box sx={{ py: { xs: 2, sm: 3 } }}>
       <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 } }}>
         
         {/* TOGGLE BADGE */}
+        {/* COMENTADO PARA NÃO APARECER NA UI
         <Box sx={{ mb: 2, textAlign: 'center' }}>
           <Box 
             onClick={toggleSource}
@@ -229,11 +260,7 @@ export default function ProductDetail() {
               display: 'inline-block',
               bgcolor: source === 'jumpseller' ? '#4caf50' : '#ff9800',
               color: 'white',
-              px: 2,
-              py: 0.5,
-              borderRadius: 1,
-              fontWeight: 'bold',
-              cursor: 'pointer',
+              px: 2, py: 0.5, borderRadius: 1, fontWeight: 'bold', cursor: 'pointer',
               boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
               transition: 'transform 0.1s',
               '&:active': { transform: 'scale(0.95)' },
@@ -241,26 +268,27 @@ export default function ProductDetail() {
             }}
           >
             <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-              {source === 'jumpseller' ? '⚡ Fonte: Jumpseller API (Proxy)' : '💾 Fonte: Base de Dados (Cloud SQL)'} 
+              {source === 'jumpseller' ? '⚡ Fonte: API (Proxy)' : '💾 Fonte: Base de Dados'} 
               <span style={{ fontSize: '0.8em' }}>(Clique para mudar)</span>
             </Typography>
           </Box>
-        </Box>
+        </Box>*/}
 
-        {/* PRODUCT CONTENT */}
+        {/* CONTENT BOX */}
         <Box sx={{ bgcolor: '#E4E1D6', borderRadius: '24px', p: { xs: 2, sm: 3, md: 4 }, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.12), 0 4px 6px -2px rgba(0,0,0,0.06)' }}>
           <Grid container columnSpacing={{ xs: 2, md: 2 }} rowSpacing={isSmallScreen ? 2 : 0} sx={{ alignItems: 'strech', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
+            
             {/* LEFT – IMAGEM */}
             <Grid item xs={12} md={3} sx={{ display: 'flex', minWidth: 0, height: '100%', justifyContent: 'flex-end' }}>
               <Box sx={{ bgcolor: '#274836', borderRadius: '16px', p: 2, width: { md: 450 }, height: { md: 550 }, display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <Box sx={{ bgcolor: 'white', borderRadius: '8px', width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Box component="img" src={photos[selectedPhotoIndex]?.photo_url || product.mainPhoto?.photo_url || '/galo.png'} alt={photos[selectedPhotoIndex]?.alt_text || product.title} sx={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/galo.png'; }} />
+                  <Box component="img" src={photos[selectedPhotoIndex]?.photo_url || product.mainPhoto?.photo_url || '/placeholder.png'} alt={photos[selectedPhotoIndex]?.alt_text || product.title} sx={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e: any) => { e.currentTarget.src = '/placeholder.png'; }} />
                 </Box>
                 {photos.length > 1 && (
-                  <Box sx={{ display: 'flex', gap: 2, mt: 0, justifyContent: 'center' }}>
+                  <Box sx={{ display: 'flex', gap: 2, mt: 0, justifyContent: 'center', overflowX: 'auto' }}>
                     {photos.map((p, i) => (
-                      <Box key={i} onClick={() => setSelectedPhotoIndex(i)} sx={{ width: { xs: 60, sm: 60 }, height: { xs: 60, sm: 60 }, borderRadius: 2, overflow: 'hidden', border: i === selectedPhotoIndex ? '2.5px solid #344E41' : '2.5px solid transparent', cursor: 'pointer', bgcolor: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: i === selectedPhotoIndex ? '0 0 0 3px white, 0 0 10px 2px rgba(255,255,255,0.6)' : 'none', transition: 'all 0.18s' }}>
-                        <Box component="img" src={p.photo_url} alt={p.alt_text || product.title} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.src = '/galo.png'; }} />
+                      <Box key={i} onClick={() => setSelectedPhotoIndex(i)} sx={{ width: { xs: 60, sm: 60 }, height: { xs: 60, sm: 60 }, flexShrink: 0, borderRadius: 2, overflow: 'hidden', border: i === selectedPhotoIndex ? '2.5px solid #344E41' : '2.5px solid transparent', cursor: 'pointer', bgcolor: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: i === selectedPhotoIndex ? '0 0 0 3px white, 0 0 10px 2px rgba(255,255,255,0.6)' : 'none', transition: 'all 0.18s' }}>
+                        <Box component="img" src={p.photo_url} alt={p.alt_text || product.title} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </Box>
                     ))}
                   </Box>
@@ -271,31 +299,51 @@ export default function ProductDetail() {
             {/* RIGHT – INFO */}
             <Grid item xs={12} md={9} sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', pl: { md: 3 }, flex: 1 }}>
               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: 3 }}>
+                
+                {/* Header Info */}
                 <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1, gap: 2 }}>
                     <Box sx={{ flexGrow: 1 }}>
-                      <Typography variant="h3" component="h1" sx={{ fontSize: { xs: '2rem', sm: '2.25rem', lg: '2.5rem' }, fontWeight: 'bold', color: '#344E41', lineHeight: 1.1, wordBreak: 'break-word' }}>{product.title}</Typography>
+                      <Typography variant="h3" component="h1" sx={{ fontSize: { xs: '2rem', sm: '2.25rem', lg: '2.5rem' }, fontWeight: 'bold', color: '#344E41', lineHeight: 1.1, wordBreak: 'break-word' }}>
+                        {product.title}
+                      </Typography>
                       {product.brand && <Typography variant="subtitle1" sx={{ color: '#588157', fontWeight: 600, fontSize: { xs: '1.05rem', sm: '1.15rem' }, mt: 0.5, fontStyle: 'italic' }}>{product.brand}</Typography>}
                     </Box>
                     <IconButton aria-label="Adicionar à wishlist" sx={{ p: 1, '&:hover': { transform: 'scale(1.05)', '& svg': { fill: '#344E41' } }, flexShrink: 0 }}>
                       <svg width="40" height="40" fill="none" stroke="#344E41" strokeWidth={2.2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                     </IconButton>
                   </Box>
+
+                  {/* Storytelling Curto (Scrollable se necessário) */}
                   <Box sx={{ maxHeight: 400, overflowY: 'auto', mb: 1.5, pr: 1 }}>
-                    <Typography variant="body2" sx={{ fontSize: { xs: '1.05rem', sm: '1.12rem' }, color: 'black', lineHeight: 1.7 }}>{product.storytelling}</Typography>
+                    <Typography variant="body2" sx={{ fontSize: { xs: '1.05rem', sm: '1.12rem' }, color: 'black', lineHeight: 1.7 }}>
+                      {product.storytelling || product.description}
+                    </Typography>
                   </Box>
                 </Box>
 
+                {/* Price & Rating */}
                 <Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                    <Typography variant="h3" sx={{ fontSize: { xs: '2rem', sm: '2.25rem', lg: '2.5rem' }, fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap', flexShrink: 0 }}>{Number(product.price).toFixed(2)} €</Typography>
+                    <Typography variant="h3" sx={{ fontSize: { xs: '2rem', sm: '2.25rem', lg: '2.5rem' }, fontWeight: 'bold', color: 'black', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {Number(product.price).toFixed(2)} €
+                    </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', flexGrow: 1 }}>
-                      {reviewCount > 0 && (<><Box sx={{ display: 'flex', gap: 0.25 }}>{renderStars(product.avg_score)}</Box><Typography variant="body1" sx={{ fontSize: { xs: '1rem', sm: '1.1rem' }, fontWeight: 500, color: '#3A5A40' }}>{product.avg_score.toFixed(1)} ({reviewCount} avaliaç{reviewCount > 1 ? 'ões' : 'ão'})</Typography></>)}
-                      {reviewCount === 0 && <Typography variant="body1" sx={{ fontSize: { xs: '1rem', sm: '1.1rem' }, fontWeight: 500, color: '#999' }}>Sem avaliações</Typography>}
+                      {reviewCount > 0 ? (
+                        <>
+                          <Box sx={{ display: 'flex', gap: 0.25 }}>{renderStars(product.avg_score)}</Box>
+                          <Typography variant="body1" sx={{ fontSize: { xs: '1rem', sm: '1.1rem' }, fontWeight: 500, color: '#3A5A40' }}>
+                            {product.avg_score.toFixed(1)} ({reviewCount} avaliaç{reviewCount > 1 ? 'ões' : 'ão'})
+                          </Typography>
+                        </>
+                      ) : (
+                        <Typography variant="body1" sx={{ fontSize: { xs: '1rem', sm: '1.1rem' }, fontWeight: 500, color: '#999' }}>Sem avaliações</Typography>
+                      )}
                     </Box>
                   </Box>
                 </Box>
 
+                {/* Actions */}
                 <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, width: '100%', alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-start' } }}>
                   <Button variant="contained" sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: 160, bgcolor: '#344E41', color: 'white', p: { xs: '10px 20px', sm: '14px 28px' }, borderRadius: '12px', fontWeight: 'bold', fontSize: { xs: '0.98rem', sm: '1.05rem' }, '&:hover': { bgcolor: '#A3B18A', color: 'black' }, gap: 1.5, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)' }}>
                     <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg> Comprar
@@ -308,54 +356,43 @@ export default function ProductDetail() {
             </Grid>
           </Grid>
 
-          {/* História do Produto Section */}
+          {/* História Completa (Se houver descrição longa diferente do storytelling) */}
           <Box sx={{ bgcolor: '#F5F5F5', borderRadius: '16px', mt: 4, p: { xs: 2, sm: 3 } }}>
             <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#344E41', mb: 1, fontSize: { xs: '1.2rem', sm: '1.35rem' } }}>História do Produto</Typography>
-            <Typography variant="body1" sx={{ fontSize: { xs: '1.02rem', sm: '1.1rem' }, fontWeight: 600, color: 'black', whiteSpace: 'pre-line', lineHeight: 1.7 }}>{product.description}</Typography>
+            <Typography variant="body1" sx={{ fontSize: { xs: '1.02rem', sm: '1.1rem' }, fontWeight: 600, color: 'black', whiteSpace: 'pre-line', lineHeight: 1.7 }}>
+              {product.description}
+            </Typography>
           </Box>
         </Box>
         <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
       </Box>
+
+      {/* COMPONENTE DE ESPECIFICAÇÕES (Otimizado: Recebe dados via Props) */}
+      {product.specifications && product.specifications.length > 0 && (
+         <ProductSpecifications data={product.specifications} />
+      )}
     </Box>
   );
 }
 
-export function ProductSpecifications() {
-  const [product, setProduct] = useState<ProductFromApi | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Este componente carrega independentemente. Idealmente partilharia estado com o pai,
-  // mas para manter simples, deixamos carregar sempre do Jumpseller/Proxy por padrão.
-  useEffect(() => {
-    let isMounted = true;
-    const fetchProduct = async () => {
-      if (!isMounted) return;
-      setLoading(true);
-      try {
-        const res = await fetch(`${API_BASE_URL}/products/${GALO_PRODUCT_ID}`);
-        if (res.ok && isMounted) {
-          const rawData = await res.json();
-          setProduct(mapJumpsellerToProduct(rawData, []));
-        }
-      } catch { } finally { if (isMounted) setLoading(false); }
-    };
-    fetchProduct();
-    return () => { isMounted = false; };
-  }, []);
-
-  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={40} sx={{ color: '#344E41' }} /></Box>;
-  if (!product || !product.specifications?.length) return null;
+// --- Componente de Especificações ---
+// Mantido o estilo visual, mas recebe 'data' em vez de fazer fetch
+export function ProductSpecifications({ data }: { data: ProductSpecification[] }) {
+  if (!data || !data.length) return null;
 
   return (
     <>
       <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 }, display: 'flex', flexDirection: 'column', gap: 1.5, pb: 4 }}>
-        {product.specifications.map((spec, index) => (
+        {data.map((spec, index) => (
           <React.Fragment key={index}>
             <Box sx={{ bgcolor: '#E4E1D6', borderRadius: '16px', p: { xs: 2.5, sm: 3, md: 3.5 } }}>
               <Typography variant="h4" sx={{ fontSize: { xs: '1.3rem', sm: '1.6rem' }, fontWeight: 'bold', color: 'black', mb: 1.25 }}>{spec.title}</Typography>
-              <Typography variant="body1" sx={{ color: 'black', fontSize: { xs: '1.05rem', sm: '1.12rem' }, lineHeight: 1.6, whiteSpace: 'pre-line', pl: { xs: 1, sm: 2 } }}>{spec.description}</Typography>
+              <Typography variant="body1" sx={{ color: 'black', fontSize: { xs: '1.05rem', sm: '1.12rem' }, lineHeight: 1.6, whiteSpace: 'pre-line', pl: { xs: 1, sm: 2 } }}>
+                {spec.description}
+              </Typography>
             </Box>
-            {index < product.specifications.length - 1 && <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />}
+            {/* Divisor entre specs, se quiseres estilo idêntico ao original */}
+            {index < data.length - 1 && <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />}
           </React.Fragment>
         ))}
       </Box>
