@@ -18,7 +18,9 @@ steps:
       - 'REACT_APP_API_BASE=https://t2-api-1063861730054.europe-west1.run.app/api' # Confirme se este URL está certo
       - '-t'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/product-repo/t2-web:latest'
-      - 'apps/mips_product_page'
+      - '-f'
+      - 'apps/mips_product_page/Dockerfile'
+      - '.' 
 
   # ==========================================
   # 3. PUSH IMAGES (Enviar para o Google Artifact Registry)
