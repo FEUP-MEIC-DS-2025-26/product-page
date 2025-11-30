@@ -11,7 +11,10 @@ RUN apk add --no-cache libc6-compat curl bash
 FROM base AS prod-deps
 WORKDIR /app
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
-COPY package.json pnpm-lock.yaml ./
+
+# copiar ficheiros essenciais PARA PROD (inclui workspace file para compatibilidade)
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+# instalar só deps de produção
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts || pnpm install --prod --ignore-scripts --force
 
 # ===== builder =====
@@ -22,15 +25,16 @@ WORKDIR /app
 ENV PATH=/app/node_modules/.bin:$PATH
 ENV PATH=$PATH:/root/.local/share/pnpm/global/5/node_modules/.bin
 
-# copiar todo o repo (IMPORTANTE: copiar código antes de instalar permite que pnpm veja todos os packages workspace)
-COPY . .
+# ---- IMPORTANTE: copia primeiro os ficheiros do workspace para que pnpm detecte o monorepo
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 
-# garantir que os ficheiros de workspace/lock estão no local (seguro repetir)
-COPY package.json pnpm-lock.yaml ./
-
-# instalar deps no workspace root (hoisting) — necessário para rsbuild e plugins
+# instalar todas as deps no workspace (hoisting) — necessário para rsbuild e plugins
+# evita correr postinstall scripts problemáticos com --ignore-scripts
 RUN NODE_ENV=development pnpm -w install --frozen-lockfile --ignore-scripts --shamefully-hoist || \
     NODE_ENV=development pnpm -w install --ignore-scripts --force --shamefully-hoist
+
+# agora copia o resto do código (após instalar para aproveitar cache)
+COPY . .
 
 # setar envs que o rsbuild pode precisar
 ARG REACT_APP_API_BASE
@@ -59,7 +63,7 @@ RUN for f in node_modules/.federation/tsconfig*.json; do \
       fi; \
     done
 
-# --- CRUCIAL: executa o rsbuild a partir do diretório do microfrontend ---
+# --- executa o rsbuild a partir do diretório do microfrontend ---
 RUN cd apps/mips_product_page && pnpm exec -- rsbuild --version || true
 RUN cd apps/mips_product_page && pnpm exec -- rsbuild build
 
