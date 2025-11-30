@@ -31,12 +31,10 @@ jobs:
 
       - name: Deploy Backend
         run: |
-          # Submit Build (Usa o ficheiro cloudbuild.api.yaml se ele existir na raiz)
+          # Submit Build
           gcloud builds submit --config=cloudbuild.api.yaml . --project=${{ env.PROJECT_ID }}
           
           # Deploy Cloud Run
-          # NOTA: Configurei as chaves para usarem Secrets do GitHub. 
-          # Vai a Settings -> Secrets and variables -> Actions e cria: JUMPSELLER_LOGIN e JUMPSELLER_TOKEN
           gcloud run deploy t2-api \
             --image=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-api:latest \
             --region=${{ env.REGION }} \
@@ -44,28 +42,17 @@ jobs:
             --allow-unauthenticated \
             --port=3002 \
             --add-cloudsql-instances=mimetic-sunset-478418-d1:europe-west1:t2-postgres-db \
-            --set-env-vars="JUMPSELLER_LOGIN=${{ secrets.JUMPSELLER_LOGIN }},JUMPSELLER_TOKEN=${{ secrets.JUMPSELLER_TOKEN }},DATABASE_URL=postgresql://postgres:gyokeres@localhost/product-page?host=/cloudsql/mimetic-sunset-478418-d1:europe-west1:t2-postgres-db"
+            --set-env-vars="JUMPSELLER_LOGIN=9b17635cae02b02f637e973d78f2d421,JUMPSELLER_TOKEN=ef9a80dfb6d3c1bcae9f3a5d2589d0d3,DATABASE_URL=postgresql://postgres:gyokeres@localhost/product-page?host=/cloudsql/mimetic-sunset-478418-d1:europe-west1:t2-postgres-db"
 
-      - name: Deploy Frontend (Product Page)
+      - name: Deploy Frontend
         run: |
-          # 1. Autenticar Docker com a Google
-          gcloud auth configure-docker europe-west1-docker.pkg.dev
+          gcloud builds submit \
+            --tag=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
+            apps/mips_product_page \
+            --project=${{ env.PROJECT_ID }}
 
-          # 2. Build da Imagem
-          # O ponto (.) no fim significa "usa a pasta atual como contexto" (para apanhar a pasta prisma da raiz)
-          # O -f diz "mas usa as instruções deste ficheiro específico" (ignorando o Host)
-          docker build . \
-            -f apps/mips_product_page/Dockerfile \
-            -t europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest
-
-          # 3. Enviar imagem para a Google
-          docker push europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest
-
-          # 4. Deploy no Cloud Run
-          # Nota: Se quiseres separar nomes, podes mudar 't2-web' para 't2-product-page'
           gcloud run deploy t2-web \
             --image=europe-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/product-repo/t2-web:latest \
             --region=${{ env.REGION }} \
             --project=${{ env.PROJECT_ID }} \
-            --allow-unauthenticated \
-            --set-env-vars="API_URL=${{ env.API_URL }}"
+            --allow-unauthenticated

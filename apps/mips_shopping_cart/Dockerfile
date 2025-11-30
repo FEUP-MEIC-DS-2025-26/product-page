@@ -1,3 +1,4 @@
+# apps/mips_shopping_cart/Dockerfile
 FROM node:25-alpine3.21
 
 # Install pnpm
@@ -9,13 +10,7 @@ WORKDIR /app
 # Copy pnpm files
 COPY package.json pnpm-lock.yaml ./
 
-# --- CORREÇÃO 1: Copiar a pasta prisma ANTES do install ---
-COPY prisma ./prisma
-
-# --- CORREÇÃO 2: URL Dummy para o Prisma validar o schema durante o build ---
-ENV DATABASE_URL="postgresql://postgres:postgres@db:5432/product-page?schema=public"
-
-# Install dependencies (agora o script postinstall já encontra o schema)
+# Install dependencies
 RUN pnpm install --force 
 
 # Copy source code

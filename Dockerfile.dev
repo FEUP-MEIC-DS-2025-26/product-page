@@ -1,23 +1,53 @@
+# ==========================================
+# DOCKERFILE DE DESENVOLVIMENTO (mips_host)
+# ==========================================
+
+# 1. Imagem Base (Node 22)
 FROM node:22-alpine
 
+# 2. Instalar utilitários de sistema
+# openssl é necessário para o Prisma; git às vezes é necessário para watchers
+RUN apk add --no-cache libc6-compat openssl git curl
+
+# 3. Instalar pnpm globalmente
+RUN npm install -g pnpm@8
+
+# 4. Definir diretório de trabalho na raiz
 WORKDIR /app
 
-RUN npm install -g pnpm@8 \
-  && apk add --no-cache libc6-compat
-
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
-
-# 1) Instalar deps sem correr scripts (postinstall)
+# 5. --- ESTRATÉGIA MONOREPO ---
+# Copiamos os package.json da raiz e de todas as apps
+# Isso permite que o pnpm instale dependências e faça os links do workspace
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --force --ignore-scripts
+COPY apps/mips_host/package.json ./apps/mips_host/
+COPY apps/mips_product_page/package.json ./apps/mips_product_page/
+COPY apps/mips_shopping_cart/package.json ./apps/mips_shopping_cart/
+COPY apps/mips_backend/package.json ./apps/mips_backend/
 
-# 2) Copiar o resto do código (inclui prisma/)
+# 6. Instalar dependências
+# Usamos --force em dev às vezes para evitar erros de lockfile em ambientes mistos (Win/Linux)
+RUN pnpm install --frozen-lockfile --ignore-scripts || pnpm install --force --ignore-scripts
+
+# 7. Copiar o código fonte todo
 COPY . .
 
-# 3) Gerar Prisma Client agora que o schema existe
-RUN pnpm exec prisma generate
+# 8. --- SETUP PRISMA ---
+# Igual à produção: instalar e gerar para ter os Tipos TypeScript disponíveis
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
+RUN npm install -g prisma@6
+RUN prisma generate
 
+# 9. Variáveis de Ambiente de Dev
+ENV NODE_ENV=development
+# Desativar telemetria do Next.js (se usado) para silenciar logs
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# 10. Mudar para a pasta da aplicação específica
+WORKDIR /app/apps/mips_host
+
+# 11. Expor a porta (Confira se o Rsbuild usa a 3000 por padrão)
 EXPOSE 3000
 
-CMD ["pnpm", "dev"]
+# 12. Comando de arranque
+# --host 0.0.0.0 é OBRIGATÓRIO para acessar o localhost de fora do container
+CMD ["pnpm", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

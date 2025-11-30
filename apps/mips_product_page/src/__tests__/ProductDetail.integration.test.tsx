@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProductDetail from '../components/ProductDetail';
 
-// Mock matchMedia
+// Mock muito simples do matchMedia usado pelo MUI
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: any) => ({
@@ -18,116 +18,125 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
-// --- DADOS DE MOCK (Formato Jumpseller API) ---
-const mockProductCorrectFormat = {
+const mockProduct = {
   id: 1,
-  name: 'Galo de Barcelos',
+  title: 'Galo de Barcelos',
+  storytelling: 'História linda do produto...',
   description: 'Descrição do produto para testar.',
-  price: 25.00,
-  images: [
-    { url: 'https://example.com/main.jpg', description: 'Foto principal' },
-    { url: 'https://example.com/extra.jpg', description: 'Foto extra' }
+  price: 25,
+  avg_score: 4.5,
+  reviewCount: 3,
+  mainPhoto: {
+    photo_url: 'https://example.com/main.jpg',
+    alt_text: 'Foto principal',
+  },
+  photos: [
+    {
+      photo_url: 'https://example.com/main.jpg',
+      alt_text: 'Foto principal',
+    },
+    {
+      photo_url: 'https://example.com/extra.jpg',
+      alt_text: 'Foto extra',
+    },
   ],
-  fields: [] 
+  specifications: null,
 };
 
-// --- Helpers ---
-
+// helper para mockar o fetch com sucesso
 const mockFetchSuccess = () => {
-  (global as any).fetch = jest.fn((url: string) => {
-      // Mock para reviews (opcional, evita erros na consola)
-      if (url.includes('/reviews')) {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-      }
-      // Mock para produto
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockProductCorrectFormat),
-      });
-  });
-};
-
-const mockFetchError = () => {
   (global as any).fetch = jest.fn(() =>
     Promise.resolve({
-      ok: false,
-      status: 500,
+      ok: true,
+      json: () => Promise.resolve(mockProduct),
     }),
   );
 };
 
-describe('ProductDetail Integration', () => {
-  
-  // CORREÇÃO 1: beforeEach simples e fechado corretamente
+// helper para mockar erro no fetch
+const mockFetchError = () => {
+  (global as any).fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: false,
+    }),
+  );
+};
+
+describe('ProductDetail', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   test('mostra o texto de loading enquanto carrega o produto', async () => {
     mockFetchSuccess();
+
     render(<ProductDetail />);
 
-    expect(screen.getByText(/A carregar/i)).toBeInTheDocument();
-    
-    await waitFor(() => expect(screen.queryByText(/A carregar/i)).not.toBeInTheDocument());
+    // 1) primeiro vê o loading
+    expect(screen.getByText(/A carregar produto/i)).toBeInTheDocument();
+
+    // 2) depois deixa de ver o loading quando o fetch resolve
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/A carregar produto/i),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   test('renderiza título, descrição e preço quando o produto é carregado', async () => {
     mockFetchSuccess();
+
     render(<ProductDetail />);
 
-    // Título
-    const title = await screen.findByRole('heading', { name: /Galo de Barcelos/i });
+    // esperar que o título apareça
+    const title = await screen.findByRole('heading', {
+      name: /Galo de Barcelos/i,
+    });
     expect(title).toBeInTheDocument();
 
-    // Descrição
-    const descriptions = screen.getAllByText(/Descrição do produto para testar./i);
-    expect(descriptions.length).toBeGreaterThan(0);
-    expect(descriptions[0]).toBeInTheDocument();
+    expect(
+      screen.getByText(/Descrição do produto para testar./i),
+    ).toBeInTheDocument();
 
-    // Preço
+    // preço formatado com 2 casas decimais
     expect(screen.getByText('25.00 €')).toBeInTheDocument();
+
+    // texto de avaliações
+    expect(screen.getByText(/\(3 avaliações\)/i)).toBeInTheDocument();
   });
 
-  test('mostra erro e permite tentar trocar de fonte se falhar', async () => {
-    mockFetchError(); 
+  test('mostra mensagem de erro se o fetch falhar', async () => {
+    mockFetchError();
+
     render(<ProductDetail />);
 
-    // Usa findByRole para evitar conflito de múltiplos textos
-    const errorHeading = await screen.findByRole('heading', { name: /Erro/i }, { timeout: 10000 });
-    expect(errorHeading).toBeInTheDocument();
+    const errorMsg = await screen.findByText(/Erro ao carregar produto/i);
+    expect(errorMsg).toBeInTheDocument();
+  });
 
-    const switchButton = screen.getByRole('button', { name: /Tentar mudar/i });
-    expect(switchButton).toBeInTheDocument();
-  }, 15000); 
-
-  // CORREÇÃO 3: Removida a tentativa de clicar no botão "Fonte" (que está oculto)
-  // O teste agora foca-se apenas na troca de imagens da galeria
-  test('permite trocar a imagem principal ao clicar na miniatura', async () => {
+    test('permite trocar a foto ao clicar nas miniaturas', async () => {
     mockFetchSuccess();
+
     render(<ProductDetail />);
-    
-    // Espera o produto carregar
-    await screen.findByRole('heading', { name: /Galo de Barcelos/i });
 
-    // 1. Verificar imagem inicial (main.jpg)
-    const mainImages = screen.getAllByAltText('Foto principal'); // O mock tem alt="Foto principal"
-    const mainImgBefore = mainImages.find(img => (img as HTMLImageElement).src.includes('main.jpg'));
+    // há duas imagens "Foto principal": main + thumbnail
+    const [mainImgBefore] = await screen.findAllByAltText(/Foto principal/i);
     expect(mainImgBefore).toBeInTheDocument();
+    expect((mainImgBefore as HTMLImageElement).src).toContain(
+      'https://example.com/main.jpg',
+    );
 
-    // 2. Clicar na miniatura "Foto extra"
-    // Nota: O componente ProductDetail usa o mesmo array de fotos para a imagem grande e as miniaturas.
-    // Precisamos encontrar a miniatura especifica.
-    const extraImages = screen.getAllByAltText('Foto extra');
-    // Normalmente a primeira é a que está no carrossel/lista de miniaturas
-    fireEvent.click(extraImages[0]);
+    // clicar na miniatura "Foto extra"
+    const thumbExtra = await screen.findByRole('img', { name: /Foto extra/i });
+    fireEvent.click(thumbExtra);
 
-    // 3. Verificar se a imagem principal mudou para extra.jpg
+    // depois de clicar, a imagem principal deve passar a ser "Foto extra"
     await waitFor(() => {
-      // Agora procuramos a imagem extra que está a ser exibida como principal (tamanho maior ou visivel)
-      const allExtraImages = screen.getAllByAltText('Foto extra');
-      const visibleExtra = allExtraImages.find(img => (img as HTMLImageElement).src.includes('extra.jpg'));
-      expect(visibleExtra).toBeInTheDocument();
+      const [mainImgAfter] = screen.getAllByAltText(/Foto extra/i);
+      expect((mainImgAfter as HTMLImageElement).src).toContain(
+        'https://example.com/extra.jpg',
+      );
     });
   });
+
 });
