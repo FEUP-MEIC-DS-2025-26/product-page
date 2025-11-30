@@ -1,0 +1,3 @@
+
+    export type RemoteKeys = 'mips_reviews/ProductReviews' | 'mips_reviews/NewReviewForm' | 'mips_reviews/ReviewsPage';
+    type PackageType<T> = T extends 'mips_reviews/ReviewsPage' ? typeof import('mips_reviews/ReviewsPage') :T extends 'mips_reviews/NewReviewForm' ? typeof import('mips_reviews/NewReviewForm') :T extends 'mips_reviews/ProductReviews' ? typeof import('mips_reviews/ProductReviews') :any;
