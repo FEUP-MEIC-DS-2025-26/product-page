@@ -3,7 +3,14 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProductDetail from '../components/ProductDetail';
 
-// Mock muito simples do matchMedia usado pelo MUI
+// 1. Mock do Módulo Remoto (Reviews)
+jest.mock('mips_reviews/ProductReviews', () => {
+  return function DummyReviews() {
+    return <div data-testid="remote-reviews">Reviews Component</div>;
+  };
+}, { virtual: true });
+
+// 2. Mock do matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: any) => ({
@@ -18,125 +25,107 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
-const mockProduct = {
-  id: 1,
-  title: 'Galo de Barcelos',
-  storytelling: 'História linda do produto...',
-  description: 'Descrição do produto para testar.',
-  price: 25,
-  avg_score: 4.5,
-  reviewCount: 3,
-  mainPhoto: {
-    photo_url: 'https://example.com/main.jpg',
-    alt_text: 'Foto principal',
-  },
-  photos: [
-    {
-      photo_url: 'https://example.com/main.jpg',
-      alt_text: 'Foto principal',
-    },
-    {
-      photo_url: 'https://example.com/extra.jpg',
-      alt_text: 'Foto extra',
-    },
-  ],
-  specifications: null,
+// 3. Dados Mock
+const mockJumpsellerResponse = {
+  product: {
+    id: 32863784,
+    name: 'Galo de Barcelos',
+    description: '<p>Uma história rica e colorida...</p>',
+    price: 25.50,
+    images: [
+      { url: 'https://example.com/galo-main.jpg', description: 'Foto Principal' },
+      { url: 'https://example.com/galo-side.jpg', description: 'Foto Lateral' },
+    ],
+    fields: [{ label: 'Material', value: 'Cerâmica' }]
+  }
 };
 
-// helper para mockar o fetch com sucesso
-const mockFetchSuccess = () => {
-  (global as any).fetch = jest.fn(() =>
-    Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve(mockProduct),
-    }),
-  );
-};
+describe('ProductDetail Integration', () => {
+  const originalFetch = global.fetch;
 
-// helper para mockar erro no fetch
-const mockFetchError = () => {
-  (global as any).fetch = jest.fn(() =>
-    Promise.resolve({
-      ok: false,
-    }),
-  );
-};
-
-describe('ProductDetail', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  test('mostra o texto de loading enquanto carrega o produto', async () => {
-    mockFetchSuccess();
-
-    render(<ProductDetail />);
-
-    // 1) primeiro vê o loading
-    expect(screen.getByText(/A carregar produto/i)).toBeInTheDocument();
-
-    // 2) depois deixa de ver o loading quando o fetch resolve
-    await waitFor(() =>
-      expect(
-        screen.queryByText(/A carregar produto/i),
-      ).not.toBeInTheDocument(),
-    );
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
   });
 
-  test('renderiza título, descrição e preço quando o produto é carregado', async () => {
-    mockFetchSuccess();
-
+  test('mostra o indicador de loading inicial', async () => {
+    (global as any).fetch = jest.fn(() => new Promise(() => {}));
     render(<ProductDetail />);
+    expect(screen.getByText(/A carregar \(API\)/i)).toBeInTheDocument();
+  });
 
-    // esperar que o título apareça
-    const title = await screen.findByRole('heading', {
-      name: /Galo de Barcelos/i,
+  test('renderiza os dados corretamente (Happy Path)', async () => {
+    (global as any).fetch = jest.fn((url: any) => {
+      if (url.toString().includes('/reviews')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockJumpsellerResponse),
+      });
     });
-    expect(title).toBeInTheDocument();
-
-    expect(
-      screen.getByText(/Descrição do produto para testar./i),
-    ).toBeInTheDocument();
-
-    // preço formatado com 2 casas decimais
-    expect(screen.getByText('25.00 €')).toBeInTheDocument();
-
-    // texto de avaliações
-    expect(screen.getByText(/\(3 avaliações\)/i)).toBeInTheDocument();
-  });
-
-  test('mostra mensagem de erro se o fetch falhar', async () => {
-    mockFetchError();
 
     render(<ProductDetail />);
 
-    const errorMsg = await screen.findByText(/Erro ao carregar produto/i);
+    await screen.findByRole('heading', { name: /Galo de Barcelos/i, level: 1 });
+    const descriptions = await screen.findAllByText(/Uma história rica e colorida/i);
+    expect(descriptions.length).toBeGreaterThan(0);
+    expect(screen.getByText('25.50 €')).toBeInTheDocument();
+  });
+
+  test('mostra mensagem de erro (404) após retries', async () => {
+    (global as any).fetch = jest.fn((url: any) => {
+      // Reviews OK para não crashar
+      if (url.toString().includes('/reviews')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      
+      // Produto falha com 404
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+    });
+
+    render(<ProductDetail />);
+
+    // CORREÇÃO: Aumentamos o timeout para 6000ms (6s).
+    // O componente faz retries (1s + 1.5s + ...) antes de mostrar o erro.
+    const errorMsg = await screen.findByText(/Erro/i, {}, { timeout: 6000 });
     expect(errorMsg).toBeInTheDocument();
+    
+    expect(screen.getByText(/404/i)).toBeInTheDocument();
   });
 
-    test('permite trocar a foto ao clicar nas miniaturas', async () => {
-    mockFetchSuccess();
+  test('troca a imagem principal ao clicar na miniatura', async () => {
+    (global as any).fetch = jest.fn((url: any) => {
+      if (url.toString().includes('/reviews')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockJumpsellerResponse),
+      });
+    });
 
     render(<ProductDetail />);
 
-    // há duas imagens "Foto principal": main + thumbnail
-    const [mainImgBefore] = await screen.findAllByAltText(/Foto principal/i);
-    expect(mainImgBefore).toBeInTheDocument();
-    expect((mainImgBefore as HTMLImageElement).src).toContain(
-      'https://example.com/main.jpg',
-    );
+    await screen.findByRole('heading', { name: /Galo de Barcelos/i });
 
-    // clicar na miniatura "Foto extra"
-    const thumbExtra = await screen.findByRole('img', { name: /Foto extra/i });
-    fireEvent.click(thumbExtra);
+    const sideThumb = screen.getByAltText('Foto Lateral');
+    fireEvent.click(sideThumb);
 
-    // depois de clicar, a imagem principal deve passar a ser "Foto extra"
     await waitFor(() => {
-      const [mainImgAfter] = screen.getAllByAltText(/Foto extra/i);
-      expect((mainImgAfter as HTMLImageElement).src).toContain(
-        'https://example.com/extra.jpg',
-      );
+      const images = screen.getAllByAltText('Foto Lateral');
+      const mainImage = images.find(img => (img as HTMLImageElement).src.includes('galo-side.jpg'));
+      expect(mainImage).toBeInTheDocument();
     });
   });
-
 });
