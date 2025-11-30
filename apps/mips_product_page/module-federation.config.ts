@@ -10,6 +10,10 @@ export default createModuleFederationConfig({
   exposes: {
     './ProductPage': './src/components/ProductPage.tsx',
   },
+  remotes: {
+     mips_reviews: "mips_reviews@https://reviews-frontend-bk4zrk5bua-ew.a.run.app/mf-manifest.json",
+  },
+  shareStrategy: "loaded-first",
   shared: {
     react: {
       singleton: true,

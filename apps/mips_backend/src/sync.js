@@ -1,18 +1,10 @@
 import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
-import { PubSub } from '@google-cloud/pubsub'; // <--- NOVA IMPORTAÇÃO
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const prisma = new PrismaClient();
-
-// Configuração do Pub/Sub
-// O nome da subscrição deve ser IGUAL ao que puseste no Terraform
-const SUBSCRIPTION_NAME = 'product-page-sync-sub'; 
-const pubSubClient = new PubSub({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT // Certifica-te que tens isto no .env
-});
 
 // Jumpseller API client
 const jumpsellerClient = axios.create({
@@ -72,19 +64,28 @@ async function fetchProductReviews(productId) {
     const response = await jumpsellerClient.get(`/products/${productId}/reviews.json`);
     const reviewsData = response.data || [];
     
+    console.log(`   📋 Raw reviews response:`, JSON.stringify(reviewsData, null, 2));
+    
     // Unwrap the review from the nested structure and filter valid ratings
     const unwrappedReviews = reviewsData
       .map(item => item.review || item) // Unwrap nested review object
       .filter(review => {
         const rating = Number(review.rating);
         const isValid = !isNaN(rating) && rating >= 1 && rating <= 5;
+        
+        if (!isValid) {
+          console.log(`   ⚠️ Skipping review with invalid rating: ${review.rating}`);
+        }
+        
         return isValid;
       });
     
+    console.log(`   ✅ Valid reviews after filtering: ${unwrappedReviews.length}`);
     return unwrappedReviews;
     
   } catch (error) {
     if (error.response?.status === 404) {
+      console.log(`   ℹ️ No reviews endpoint found for product ${productId}`);
       return [];
     }
     console.error(`   ⚠️ Error fetching reviews for product ${productId}:`, error.response?.data || error.message);
@@ -109,7 +110,7 @@ function calculateAverageRating(reviews) {
 
 // Sync products and reviews to database
 async function syncToDatabase() {
-  console.log('🔄 Starting Jumpseller → Database Sync (Triggered by Pub/Sub)\n');
+  console.log('🔄 Starting Jumpseller → Database Sync\n');
   console.log('='.repeat(60));
 
   try {
@@ -119,6 +120,7 @@ async function syncToDatabase() {
     });
 
     if (!defaultUser) {
+      console.log('📝 Creating default system user...');
       defaultUser = await prisma.user.create({
         data: {
           username: 'jumpseller_system',
@@ -128,6 +130,7 @@ async function syncToDatabase() {
           password_hash: 'SYSTEM_ACCOUNT_NO_LOGIN',
         },
       });
+      console.log('✅ Default user created\n');
     }
 
     // 2. Fetch all products from Jumpseller
@@ -139,10 +142,23 @@ async function syncToDatabase() {
     }
 
     // 3. Process each product
+    let productsCreated = 0;
+    let productsUpdated = 0;
+    let reviewsCreated = 0;
+    let reviewsSkipped = 0;
+
     for (const jsProduct of jumpsellerProducts) {
+      console.log(`\n📦 Processing: ${jsProduct.name} (SKU: ${jsProduct.sku || 'N/A'})`);
+
       // Fetch reviews for this product
       const reviews = await fetchProductReviews(jsProduct.id);
+      console.log(`   📊 Found ${reviews.length} valid reviews`);
+
+      // Calculate average score
       const avgScore = calculateAverageRating(reviews);
+      if (reviews.length > 0) {
+        console.log(`   ⭐ Average score: ${avgScore}`);
+      }
 
       // Convert custom fields to specifications
       const specifications = jsProduct.fields
@@ -154,13 +170,17 @@ async function syncToDatabase() {
 
       // Parse price safely
       const price = parseFloat(jsProduct.price);
-      
+      if (isNaN(price)) {
+        console.warn(`   ⚠️ Invalid price for product: ${jsProduct.price}, defaulting to 0`);
+      }
+
       // Check if product already exists
       const existingProduct = await prisma.product.findUnique({
         where: { jumpseller_id: jsProduct.id },
       });
 
       let product;
+
       const productData = {
         title: jsProduct.name || 'Untitled Product',
         description: stripHtmlTags(jsProduct.description || ''),
@@ -174,114 +194,128 @@ async function syncToDatabase() {
       };
 
       if (existingProduct) {
+        // Update existing product
         product = await prisma.product.update({
           where: { jumpseller_id: jsProduct.id },
-          data: { ...productData, updated_at: new Date() },
+          data: {
+            ...productData,
+            updated_at: new Date(),
+          },
         });
+        productsUpdated++;
+        console.log('   ✅ Product updated');
       } else {
+        // Create new product with relation
         product = await prisma.product.create({
           data: {
             jumpseller_id: jsProduct.id,
             ...productData,
-            created_by: { connect: { id: defaultUser.id } }
+            created_by: {
+              connect: { id: defaultUser.id }
+            }
           },
         });
+        productsCreated++;
+        console.log('   ✅ Product created');
       }
 
-      // Sync photos (simplificado para poupar espaço no log)
+      // Sync product photos
       if (jsProduct.images && jsProduct.images.length > 0) {
-        await prisma.productPhoto.deleteMany({ where: { product_id: product.id } });
+        // Delete old photos
+        await prisma.productPhoto.deleteMany({
+          where: { product_id: product.id },
+        });
+
+        // Create new photos
         const photoData = jsProduct.images.map((img, index) => ({
           product_id: product.id,
           photo_url: img.url,
           alt_text: img.description || jsProduct.name,
           is_main: img.position === 1 || index === 0,
         }));
-        await prisma.productPhoto.createMany({ data: photoData });
+
+        await prisma.productPhoto.createMany({
+          data: photoData,
+        });
+        console.log(`   📸 Synced ${jsProduct.images.length} photos`);
       }
 
-      // Sync reviews (simplificado)
+      // Sync reviews
       for (const jsReview of reviews) {
         const rating = Number(jsReview.rating);
-        if (isNaN(rating) || rating < 1 || rating > 5) continue;
+        
+        // Skip invalid ratings (double-check)
+        if (isNaN(rating) || rating < 1 || rating > 5) {
+          console.warn(`   ⚠️ Skipping invalid review rating: ${jsReview.rating}`);
+          reviewsSkipped++;
+          continue;
+        }
 
+        // Check if review already exists
         const existingReview = await prisma.review.findUnique({
           where: { jumpseller_id: jsReview.id },
         });
 
         if (!existingReview) {
-            try {
-                const reviewerEmail = jsReview.customer_email || '';
-                const reviewerName = reviewerEmail.split('@')[0] || 'Anonymous';
-                await prisma.review.create({
-                    data: {
-                    jumpseller_id: jsReview.id,
-                    score: rating,
-                    comment: jsReview.review || '',
-                    reviewer_name: reviewerName,
-                    reviewer_email: reviewerEmail,
-                    product: { connect: { id: product.id } },
-                    user: { connect: { id: defaultUser.id } },
-                    created_at: jsReview.date ? new Date(jsReview.date) : new Date(),
-                    },
-                });
-            } catch (e) {
-                console.error(`Error syncing review ${jsReview.id}`);
-            }
+          try {
+            // Extract customer email from the review
+            const reviewerEmail = jsReview.customer_email || '';
+            const reviewerName = reviewerEmail.split('@')[0] || 'Anonymous'; // Use email prefix as name
+            
+            await prisma.review.create({
+              data: {
+                jumpseller_id: jsReview.id,
+                score: rating,
+                comment: jsReview.review || '', // Note: field is "review" not "comment"
+                reviewer_name: reviewerName,
+                reviewer_email: reviewerEmail,
+                product: {
+                  connect: { id: product.id }
+                },
+                user: {
+                  connect: { id: defaultUser.id }
+                },
+                created_at: jsReview.date ? new Date(jsReview.date) : new Date(),
+                updated_at: new Date(),
+              },
+            });
+            reviewsCreated++;
+            console.log(`   ✅ Created review #${jsReview.id} (${rating}⭐)`);
+          } catch (reviewError) {
+            console.error(`   ❌ Failed to create review #${jsReview.id}:`, reviewError.message);
+            reviewsSkipped++;
+          }
+        } else {
+          console.log(`   ℹ️ Review #${jsReview.id} already exists, skipping`);
         }
+      }
+
+      if (reviews.length > 0) {
+        console.log(`   ⭐ Processed ${reviews.length} reviews`);
       }
     }
 
-    console.log('✅ Sync Cycle Complete!');
+    console.log('\n' + '='.repeat(60));
+    console.log('✅ Sync Complete!\n');
+    console.log(`📊 Summary:`);
+    console.log(`   • Products created: ${productsCreated}`);
+    console.log(`   • Products updated: ${productsUpdated}`);
+    console.log(`   • Reviews created: ${reviewsCreated}`);
+    console.log(`   • Reviews skipped: ${reviewsSkipped}`);
+    console.log('='.repeat(60));
 
   } catch (error) {
     console.error('\n❌ Sync failed:', error.message);
-    throw error; // Lança erro para o catch do PubSub apanhar
+    console.error(error.stack);
+    throw error;
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
-
-// ========================================================
-// PUB/SUB LISTENER (O Código Novo)
-// ========================================================
-
-function listenForMessages() {
-  console.log(`🎧 Listening for messages on ${SUBSCRIPTION_NAME}...`);
-  
-  const subscription = pubSubClient.subscription(SUBSCRIPTION_NAME);
-
-  // Evento: Recebeu mensagem
-  subscription.on('message', async (message) => {
-    console.log(`\n🔔 Received message ID: ${message.id}`);
-    console.log(`Data: ${message.data.toString()}`);
-
-    try {
-      // Executa a lógica de sincronização
-      await syncToDatabase();
-      
-      // CRÍTICO: Avisar o Pub/Sub que o trabalho foi feito com sucesso
-      message.ack(); 
-      console.log('👍 Message acknowledged.');
-    } catch (error) {
-      console.error('👎 Failed to process message:', error);
-      // Opcional: message.nack() se quiseres que ele tente de novo imediatamente
-      // Se não fizeres nada, ele tenta de novo passado um tempo (ack deadline)
-      message.nack();
-    }
-  });
-
-  // Evento: Erro na conexão
-  subscription.on('error', (error) => {
-    console.error('❌ Received error:', error);
+// Run the sync
+syncToDatabase()
+  .catch((error) => {
+    console.error('Fatal error:', error);
     process.exit(1);
   });
-}
-
-// Inicia o Listener
-listenForMessages();
-
-// Mantém o script a correr e fecha a conexão com o Prisma se o processo morrer
-process.on('SIGINT', async () => {
-    await prisma.$disconnect();
-    process.exit(0);
-});

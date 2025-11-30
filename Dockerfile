@@ -1,74 +1,61 @@
-# ==========================================
-# 1. BASE (Tem de ser o primeiro!)
-# ==========================================
-FROM node:22-alpine AS base
-WORKDIR /app
-# Instalar pnpm, openssl (para prisma) e curl
-RUN npm install -g pnpm@8
-RUN apk add --no-cache libc6-compat curl openssl
-
-# ==========================================
-# 2. BUILDER (Construção da App)
-# ==========================================
+#####################################################
+# 3. Builder do web (precisa de TODAS as dependências)
+#####################################################
 FROM base AS builder-web
 WORKDIR /app
+
+# Copiar package + lock e instalar *todas* as deps (dev + prod)
 COPY package.json pnpm-lock.yaml ./
+# força NODE_ENV=development apenas para a instalação (assegura devDeps)
+RUN NODE_ENV=development pnpm install --frozen-lockfile --ignore-scripts || \
+    NODE_ENV=development pnpm install --ignore-scripts --force
 
-# Copiar ficheiros de configuração do workspace
-COPY apps/mips_host/package.json ./apps/mips_host/
-COPY apps/mips_product_page/package.json ./apps/mips_product_page/
-COPY apps/mips_shopping_cart/package.json ./apps/mips_shopping_cart/
-COPY apps/mips_backend/package.json ./apps/mips_backend/
-
-# Copiar tudo
+# Agora copiar o resto do código
 COPY . .
 
-# Instalar dependências (incluindo devDeps)
-RUN pnpm install --frozen-lockfile --ignore-scripts || pnpm install --ignore-scripts --force
+# Correr o prisma generate (se existir)
+RUN pnpm exec prisma generate || true
 
-# --- CORREÇÃO PRISMA ---
-# 1. Instalar versão 6 globalmente para não conflituar com a v7
-RUN npm install -g prisma@6
-# 2. Definir URL dummy para o generate passar
-ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
-# 3. Gerar cliente
-RUN prisma generate
-
-# Argumentos de Build
-ARG REACT_APP_API_BASE
-ENV REACT_APP_API_BASE=$REACT_APP_API_BASE
+# Desabilitar telemetry do Next.js
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# --- CORREÇÃO DO BUILD (Rsbuild) ---
-# O mips_host não está na raiz, está em apps/mips_host.
-# E ele gera uma pasta 'dist', não '.next'.
-RUN cd apps/mips_host && pnpm build
+# Build do Next.js
+RUN pnpm run build
 
-# ==========================================
-# 3. RUNNER (Imagem Final)
-# ==========================================
+#####################################################
+# 4. Runner do web (A imagem final)
+#####################################################
 FROM base AS runner-web
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Como o Rsbuild gera estáticos, usamos o 'serve' em vez de 'node server.js'
-RUN npm install -g serve@14
+# Criar usuário não-root
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser --system --uid 1001 nextjs
 
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+# Copiar APENAS as dependências de PRODUÇÃO (do stage prod-deps)
+COPY --from=prod-deps /app/node_modules ./node_modules
 
-# --- CORREÇÃO DE CÓPIA ---
-# Copiar apenas a pasta dist gerada pelo Rsbuild no passo anterior
-COPY --from=builder-web /app/apps/mips_host/dist ./dist
+# Copiar os artefactos do BUILD (do stage builder-web)
+# Copiamos .next e public — isto funciona quer uses standalone quer não.
+COPY --from=builder-web /app/public ./public
+COPY --from=builder-web /app/.next ./.next
+COPY --from=builder-web /app/.next/static ./.next/static || true
 
-# Ajustar permissões
+# Copiar o cliente prisma gerado e o schema
+COPY --from=builder-web /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder-web /app/prisma ./prisma
+
 RUN chown -R nextjs:nodejs /app
 USER nextjs
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/ || exit 1
+  CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Comando para servir os ficheiros estáticos
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Entrypoint que usa server.js se existir (standalone), senão usa pnpm start
+CMD ["sh","-c","if [ -f server.js ]; then node server.js; else pnpm start; fi"]

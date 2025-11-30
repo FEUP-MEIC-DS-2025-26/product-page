@@ -1,29 +1,30 @@
+# apps/mips_host/Dockerfile (mínimo, copia prisma antes de instalar)
 FROM node:25-alpine3.21
 
-# Install pnpm
+# Instala pnpm
 RUN npm install -g pnpm@8
 
-# Set workdir
 WORKDIR /app
 
-# Copy pnpm files
-COPY package.json pnpm-lock.yaml ./
+# Copia ficheiros de package/lock (para cache)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# --- CORREÇÃO 1: Copiar a pasta prisma ANTES do install ---
+# MÍNIMA ADIÇÃO: copia o prisma da root para que prisma generate funcione no postinstall
 COPY prisma ./prisma
 
-# --- CORREÇÃO 2: URL Dummy para o Prisma validar o schema durante o build ---
-ENV DATABASE_URL="postgresql://postgres:postgres@db:5432/product-page?schema=public"
+# (Opcional) Se a app tiver package.json próprio na subpasta e queres aproveitar cache:
+# COPY apps/mips_host/package.json ./apps/mips_host/package.json
 
-# Install dependencies (agora o script postinstall já encontra o schema)
-RUN pnpm install --force 
+# Instala dependências (postinstall agora encontra prisma/schema.prisma)
+RUN pnpm install --frozen-lockfile --ignore-scripts 
 
-# Copy source code
+# Copia o resto do código
 COPY . .
 
-# Rsbuild/Vite dev servers need this to be accessible
-ENV HOST=0.0.0.0
-EXPOSE 3002
+# Garante que, se por algum motivo o schema estiver, faz generate sem falhar
+RUN if [ -f ./prisma/schema.prisma ]; then pnpm prisma generate --schema=./prisma/schema.prisma || true; fi
 
-# Ajusta se o script não for "dev" ou usar outra porta
-CMD ["pnpm", "dev", "--", "--host", "0.0.0.0", "--port", "3002"]
+ENV HOST=0.0.0.0
+EXPOSE 3000
+
+CMD ["pnpm", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

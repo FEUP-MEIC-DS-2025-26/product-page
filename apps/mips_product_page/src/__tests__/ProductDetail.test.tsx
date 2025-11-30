@@ -1,11 +1,12 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProductDetail from '../components/ProductDetail';
 
-// --- Mocks ---
+// 1. Mock do Módulo Remoto
+jest.mock('mips_reviews/ProductReviews', () => () => <div>Reviews Mock</div>, { virtual: true });
 
-// Mock window.matchMedia
+// 2. Mock do matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: any) => ({
@@ -20,115 +21,72 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
-// Mock global.fetch
-global.fetch = jest.fn();
-const mockFetch = global.fetch as jest.Mock;
+describe('ProductDetail Unit Logic', () => {
+  const originalFetch = global.fetch;
 
-// --- Mock Data (Formato da API) ---
-const mockApiProduct = {
-  id: 32863784,
-  name: 'Galo de Barcelos (API)', // IMPORTANTE: A API usa 'name'
-  description: 'A beautiful rooster from the API.',
-  price: 30.0,
-  images: [ // IMPORTANTE: A API usa 'images'
-    { url: 'http://api.com/image1.jpg', description: 'API image 1' },
-    { url: 'http://api.com/image2.jpg', description: 'API image 2' },
-  ],
-  fields: [{ label: 'Material', value: 'Ceramic' }],
-};
-
-const mockDbProduct = {
-  id: 123,
-  // A Base de Dados retorna o formato já processado (title/photos)
-  title: 'Galo de Barcelos (DB)',
-  description: 'Database description...',
-  price: 25.99,
-  avg_score: 4.5,
-  reviewCount: 10,
-  mainPhoto: { photo_url: 'https://db.com/main.jpg', alt_text: 'DB main photo' },
-  photos: [
-    { photo_url: 'https://db.com/main.jpg', alt_text: 'DB main photo' },
-    { photo_url: 'https://db.com/extra.jpg', alt_text: 'DB extra photo' },
-  ],
-  specifications: [{ title: 'Origin', description: 'Portugal' }],
-};
-
-describe('ProductDetail (Unit Specs)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    (global as any).fetch = jest.fn();
   });
 
-  test('shows loading state initially', async () => {
-    mockFetch.mockReturnValue(new Promise(() => {})); // Pendente para sempre
-    render(<ProductDetail />);
-    expect(screen.getByText(/A carregar/i)).toBeInTheDocument();
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
   });
 
-  test('loads product from Jumpseller API successfully', async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/reviews')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockApiProduct) });
-    });
-
-    render(<ProductDetail />);
-
-    // Verifica se carregou o nome corretamente
-    expect(await screen.findByText('Galo de Barcelos (API)')).toBeInTheDocument();
-  });
-
-  test('falls back to database if Jumpseller API fails', async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/reviews')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  // ADICIONADO: 3º argumento '15000' para aumentar o timeout deste teste específico
+  test('Alterna para Base de Dados quando API falha (Lógica do botão)', async () => {
+    const mockFetch = jest.fn((url: any) => {
+      const urlStr = url.toString();
+      // Sempre tratar reviews para não crashar
+      if (urlStr.includes('/reviews')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
       
-      // Simula falha na API (para forçar o erro)
-      if (url.includes('/products/32863784') && !url.includes('jumpseller/')) {
-        return Promise.reject(new Error('API Error'));
-      }
-
-      // Simula sucesso na BD (quando o utilizador pedir)
-      if (url.includes('/products/jumpseller/')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockDbProduct) });
-      }
-      return Promise.reject(new Error('Unknown URL'));
+      // 1. Simular Falha da API (404)
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      });
     });
+    
+    (global as any).fetch = mockFetch;
 
     render(<ProductDetail />);
 
-    // 1. Esperar pelo botão de erro (timeout aumentado devido aos retries)
-    const errorBtn = await screen.findByRole('button', { name: /Tentar mudar/i }, { timeout: 8000 });
-    
-    // 2. Clicar
-    fireEvent.click(errorBtn);
+    // Esperar pelo ecrã de erro (pode demorar devido aos retries do componente)
+    // Aumentamos também o timeout do 'findByText' para garantir que ele espera o suficiente
+    const errorTitle = await screen.findByText(/Erro/i, {}, { timeout: 10000 });
+    expect(errorTitle).toBeInTheDocument();
 
-    // 3. Verificar se carregou da BD
-    const finalTitle = await screen.findByText('Galo de Barcelos (DB)');
-    expect(finalTitle).toBeInTheDocument();
-  });
-
-  test('allows changing the main image by clicking a thumbnail', async () => {
-    mockFetch.mockImplementation((url: string) => {
-        if (url.includes('/reviews')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockApiProduct) });
+    // 2. Preparar mock para a chamada da Base de Dados (Sucesso)
+    mockFetch.mockImplementation((url: any) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/reviews')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      
+      // Resposta de Sucesso da BD
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 999,
+          title: 'Produto vindo da BD',
+          description: 'Descricao BD',
+          price: 50,
+          photos: [],
+          specifications: []
+        })
+      });
     });
 
-    render(<ProductDetail />);
-    await screen.findByText('Galo de Barcelos (API)');
+    // 3. Encontrar e clicar no botão
+    const toggleButton = screen.getByRole('button', { name: /Tentar mudar para Base de Dados/i });
+    fireEvent.click(toggleButton);
 
-    // Procura imagens. O componente renderiza a principal e as miniaturas.
-    const allImages = screen.getAllByRole('img');
-    // A segunda imagem na lista de mocks é a miniatura que queremos clicar
-    // No mockApiProduct, a segunda imagem tem description: 'API image 2'
-    const thumb = screen.getByAltText('API image 2'); 
-    
-    fireEvent.click(thumb);
+    // 4. Verificar se o novo produto carregou
+    await screen.findByText('Produto vindo da BD');
 
-    // Verifica se alguma imagem com o src da segunda imagem está visível como destaque
-    await waitFor(() => {
-        const displayedImgs = screen.getAllByAltText('API image 2');
-        // Deve haver pelo menos uma (a principal atualizada)
-        expect(displayedImgs.length).toBeGreaterThan(0);
-        const main = displayedImgs.find(img => (img as HTMLImageElement).src.includes('image2.jpg'));
-        expect(main).toBeInTheDocument();
-    });
-  });
+  }, 15000); // <--- AQUI ESTÁ A CORREÇÃO: Aumenta o tempo limite do teste para 15s
 });

@@ -7,12 +7,17 @@ import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
+import SafeComponent from './SafeComponent';
 
 // Se o ficheiro de tipos estiver noutro lado, importa-o. 
 // Caso contrário, defino aqui para garantir que compila:
 import { JumpsellerReview } from '../services/jumpsellerApi'; 
 
 export const API_BASE_URL = "https://api.madeinportugal.store/api";
+
+const ProductReviews = React.lazy(
+  () => import("mips_reviews/ProductReviews")
+);
 
 // --- TYPES ---
 type ProductSpecification = {
@@ -131,7 +136,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
   // ID de fallback se nenhum for passado (ex: Galo de Barcelos)
-  const targetId = productId || 32863784;
+  const targetId = productId ||  32863784;
 
   const toggleSource = () => {
     setSource(prev => prev === 'jumpseller' ? 'database' : 'jumpseller');
@@ -371,6 +376,17 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
       {product.specifications && product.specifications.length > 0 && (
          <ProductSpecifications data={product.specifications} />
       )}
+
+      {/* Product Reviews */}
+      <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 }, display: 'flex', flexDirection: 'column', gap: 1.5, pb: 4 }}>
+        <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
+        <Box sx={{ bgcolor: '#E4E1D6', borderRadius: '16px', p: { xs: 2.5, sm: 3, md: 3.5 } }}>
+          <SafeComponent>
+            <ProductReviews productId={product.id} customerId={18005446} /> {/* FIXME: Pass id of the logged in customer (if null, does not allow review creation) */}
+          </SafeComponent>
+        </Box>
+      </Box>
+      <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
     </Box>
   );
 }
@@ -396,7 +412,6 @@ export function ProductSpecifications({ data }: { data: ProductSpecification[] }
           </React.Fragment>
         ))}
       </Box>
-      <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
     </>
   );
 }
