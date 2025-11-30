@@ -26,7 +26,7 @@ const mockFetch = global.fetch as jest.Mock;
 
 // --- Mock Data (Formato da API) ---
 const mockApiProduct = {
-  id: 32614736,
+  id: 32863784,
   name: 'Galo de Barcelos (API)', // IMPORTANTE: A API usa 'name'
   description: 'A beautiful rooster from the API.',
   price: 30.0,
@@ -81,7 +81,7 @@ describe('ProductDetail (Unit Specs)', () => {
       if (url.includes('/reviews')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       
       // Simula falha na API (para forçar o erro)
-      if (url.includes('/products/32614736') && !url.includes('jumpseller/')) {
+      if (url.includes('/products/32863784') && !url.includes('jumpseller/')) {
         return Promise.reject(new Error('API Error'));
       }
 
