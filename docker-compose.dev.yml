@@ -63,6 +63,20 @@ services:
       - app-network
 
   ################################################
+  # TELEMETRIA (Jaeger) - O Visualizador
+  ################################################
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686" # UI do Jaeger (Onde vês os gráficos)
+      - "4318:4318"   # Porta para receber dados (HTTP)
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - app-network
+
+  ################################################
   # INFRAESTRUTURA DE DESENVOLVIMENTO
   ################################################
   db-dev:
