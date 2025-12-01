@@ -25,3 +25,10 @@ docker-compose*.yml
 # Env files
 .env
 .env.*
+
+node_modules
+dist
+build
+.next
+.git
+.env
