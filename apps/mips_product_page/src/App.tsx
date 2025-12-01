@@ -7,6 +7,13 @@ import ProductDetail from "./components/ProductDetail";
 import { ProductSpecifications } from "./components/ProductDetail";
 import { initJumpsellerApi, getJumpsellerApi } from "./services/jumpsellerApi";
 
+import initTelemetry from './telemetry';
+
+if (process.env.NODE_ENV !== 'test') {
+    initTelemetry();
+}
+
+
 const API_BASE_URL = "https://api.madeinportugal.store/api";
 
 type AppProps = {

@@ -18,9 +18,21 @@
     "@mui/icons-material": "^7.3.5",
     "@mui/material": "^7.3.5",
     "@mui/system": "^7.3.5",
+    
+    "@opentelemetry/api": "^1.8.0",
+    "@opentelemetry/context-zone": "^1.24.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.51.0",
+    "@opentelemetry/instrumentation": "^0.51.0",
+    "@opentelemetry/instrumentation-document-load": "^0.37.0",
+    "@opentelemetry/instrumentation-fetch": "^0.51.0",
+    "@opentelemetry/resources": "^1.24.0",
+    "@opentelemetry/sdk-trace-base": "^1.24.0",
+    "@opentelemetry/sdk-trace-web": "^1.24.0",
+    "@opentelemetry/semantic-conventions": "^1.24.0",
+    
     "axios": "^1.13.2",
     "cors": "^2.8.5",
-    "express": "^5.1.0",
+    "express": "^5.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.9.5"

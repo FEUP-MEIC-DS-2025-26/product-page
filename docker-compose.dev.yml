@@ -1,82 +1,105 @@
+version: '3.8'
+
 services:
 
   ################################################
-  # MIPS PRODUCT PAGE (Micro-frontend)
-  # Usa o Dockerfile normal com target 'dev'
+  # MIPS PRODUCT PAGE (Frontend - Dev Mode)
   ################################################
   mips_product_page-dev:
     container_name: mips_product_page-dev
     build:
-      context: .                          # <--- IMPORTANTE
-      dockerfile: apps/mips_product_page/Dockerfile
-    command: pnpm dev -- --host 0.0.0.0 --port 3001
+      context: .
+      dockerfile: Dockerfile.dev
+    # [CORREÇÃO] Forçamos install antes de rodar. 
+    # O 'sh -c' permite encadear comandos.
+    command: sh -c "pnpm install && pnpm --filter mips_product_page dev -- --host 0.0.0.0 --port 3001"
+    working_dir: /app
     env_file:
       - .env
     environment:
       NODE_ENV: development
+      REACT_APP_API_BASE: "http://localhost:3003"
+      # [DICA] Se o Rsbuild reclamar de HMR (Hot Reload) websocket:
+      WDS_SOCKET_PORT: 3001
     ports:
       - "3001:3001"
     volumes:
       - ./apps/mips_product_page:/app/apps/mips_product_page
-      - /app/apps/mips_product_page/node_modules
+      # Mantemos os volumes anônimos para proteger as deps
       - /app/node_modules
+      - /app/apps/mips_product_page/node_modules
     networks:
       - app-network
 
   ################################################
-  # MIPS BACKEND (API)
+  # MIPS BACKEND (API - Dev Mode)
   ################################################
   mips_backend-dev:
     container_name: mips_backend-dev
     build:
       context: .
       dockerfile: apps/mips_backend/Dockerfile
+    # [CORREÇÃO] Install + Dev
+    command: sh -c "pnpm install && pnpm dev"
     env_file:
       - .env
     environment:
       NODE_ENV: development
       PORT: 3003
-      DATABASE_URL: ${DATABASE_URL}      # Conecta ao Postgres do container
+      DATABASE_URL: "postgresql://postgres:postgres@db-dev:5432/mips_db?schema=public"
+      REDIS_HOST: "redis-dev"
+      REDIS_PORT: 6379
     ports:
       - "3003:3003"
     volumes:
       - ./apps/mips_backend:/app/apps/mips_backend
-      - /app/apps/mips_backend/node_modules
       - /app/node_modules
+      - /app/apps/mips_backend/node_modules
+      - ./prisma:/app/prisma
     depends_on:
-      - db
-      - redis
+      - db-dev
+      - redis-dev
     networks:
       - app-network
 
   ################################################
-  # INFRAESTRUTURA (Banco de Dados e Cache)
+  # TELEMETRIA (Jaeger) - O Visualizador
   ################################################
-  db:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686" # UI do Jaeger (Onde vês os gráficos)
+      - "4318:4318"   # Porta para receber dados (HTTP)
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - app-network
+
+  ################################################
+  # INFRAESTRUTURA DE DESENVOLVIMENTO
+  ################################################
+  db-dev:
     image: postgres:15-alpine
     container_name: postgres-db-dev
-    env_file:
-      - .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-mips_db}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mips_db
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
     ports:
-      - "5433:5432" # Exposto na 5433 para não bater no Postgres local do Windows
+      - "5433:5432"
     networks:
       - app-network
-    restart: unless-stopped
 
-  redis:
+  redis-dev:
     image: redis:7-alpine
     container_name: redis-cache-dev
     ports:
-      - "6380:6379" # Exposto na 6380 para não bater no Redis local
+      - "6380:6379"
     networks:
       - app-network
-    restart: unless-stopped
 
 networks:
   app-network:
