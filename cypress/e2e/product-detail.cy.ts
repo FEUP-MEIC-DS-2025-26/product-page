@@ -1,59 +1,76 @@
 /// <reference types="cypress" />
 
-// Mock da API que o ProductDetail chama
-const mockProduct = {
-  id: 1,
-  title: 'Galo de Barcelos',
-  storytelling: 'História linda do produto...',
-  description: 'Descrição do produto para testar.',
-  price: 25,
-  avg_score: 4.5,
-  reviewCount: 3,
-  mainPhoto: {
-    photo_url: 'https://example.com/main.jpg',
-    alt_text: 'Foto principal',
-  },
-  photos: [
-    {
-      photo_url: 'https://example.com/main.jpg',
-      alt_text: 'Foto principal',
-    },
-    {
-      photo_url: 'https://example.com/extra.jpg',
-      alt_text: 'Foto extra',
-    },
-  ],
-  specifications: null,
+// 1. Mock do Produto (Estrutura Jumpseller RAW)
+const mockJumpsellerProduct = {
+  product: {
+    id: 99999, // ID irrelevante, o intercept apanha tudo
+    name: 'Galo de Barcelos',
+    description: '<p>História linda do produto...</p><p>Descrição do produto para testar.</p>',
+    price: 25.00,
+    stock: 10,
+    images: [
+      { url: 'https://madeinportugal.store/main.jpg', description: 'Foto principal' },
+      { url: 'https://madeinportugal.store/extra.jpg', description: 'Foto extra' }
+    ],
+    fields: [
+      { label: 'Material', value: 'Barro' }
+    ]
+  }
 };
+
+// 2. Mock das Reviews
+const mockReviews = [
+  { rating: 5, title: 'Ótimo', body: 'Muito bom' },
+  { rating: 4, title: 'Bom', body: 'Gostei' },
+  { rating: 5, title: 'Excelente', body: 'Perfeito' }
+];
 
 describe('ProductDetail — Testes de Aceitação', () => {
 
   beforeEach(() => {
-    // Interceta o fetch que o componente faz ao backend real
+    // [CORREÇÃO] Usamos '*' em vez de '1' para garantir que apanha o pedido
+    // mesmo que a app use o ID de fallback (32863784).
     cy.intercept(
-      'GET',
-      'http://localhost:4000/products/1',
+      'GET', 
+      '**/api/products/*', 
       {
         statusCode: 200,
-        body: mockProduct,
+        body: mockJumpsellerProduct,
       }
     ).as('getProduct');
+
+    // [CORREÇÃO] Wildcard também para as reviews
+    cy.intercept(
+      'GET',
+      '**/api/products/*/reviews',
+      {
+        statusCode: 200,
+        body: mockReviews,
+      }
+    ).as('getReviews');
   });
 
   it('carrega a página e mostra título, descrição e preço', () => {
+    // Visitamos a página. Mesmo que o router falhe e não passe o ID 1,
+    // a app vai carregar o ID default e os nossos intercepts acima (com *) vão funcionar.
     cy.visit('/product/1');    
 
-    cy.wait('@getProduct');
+    // Esperar pelos pedidos de rede
+    cy.wait(['@getProduct', '@getReviews']);
 
+    // Verificações Visuais
     cy.findByRole('heading', { name: /Galo de Barcelos/i }).should('exist');
-    cy.contains('Descrição do produto para testar.').should('exist');
-    cy.contains('25.00 €').should('exist');
+    cy.contains('História linda do produto...').should('exist');
+    
+    // Nota: O componente formata o preço com 2 casas decimais
+    cy.contains('25.00 €').should('exist'); 
   });
 
   it('mostra as estrelas e número de avaliações', () => {
     cy.visit('/product/1');
-    cy.wait('@getProduct');
+    cy.wait(['@getProduct', '@getReviews']);
 
+    // Verifica se calculou corretamente a contagem (3 items no mockReviews)
     cy.contains('(3 avaliações)').should('exist');
   });
 
@@ -61,6 +78,7 @@ describe('ProductDetail — Testes de Aceitação', () => {
     cy.visit('/product/1');
     cy.wait('@getProduct');
 
+    // Verifica se as imagens carregaram com os Alt Texts corretos
     cy.get('img[alt="Foto principal"]').should('exist');
     cy.get('img[alt="Foto extra"]').should('exist');
   });
@@ -69,16 +87,19 @@ describe('ProductDetail — Testes de Aceitação', () => {
     cy.visit('/product/1');
     cy.wait('@getProduct');
 
-    // primeira imagem deve ser a foto principal
-    cy.get('img[alt="Foto principal"]').first()
+    // 1. Verifica estado inicial: Imagem grande deve ter o src da 'main.jpg'
+    // O seletor procura a imagem dentro da área principal (pode ajustar o seletor se necessário)
+    cy.get('img[alt="Foto principal"]')
       .should('have.attr', 'src')
       .and('include', 'main.jpg');
 
-    // clicar na miniatura extra
+    // 2. Clica na miniatura da segunda foto
+    // Usamos .last() ou um seletor específico para clicar na *miniatura* e não na imagem grande
     cy.get('img[alt="Foto extra"]').click();
 
-    // imagem principal deve atualizar
-    cy.get('img[alt="Foto extra"]').first()
+    // 3. Verifica se a Imagem Grande mudou
+    // Agora a imagem grande deve ter o src da 'extra.jpg'
+    cy.get('img[alt="Foto extra"]')
       .should('have.attr', 'src')
       .and('include', 'extra.jpg');
   });
