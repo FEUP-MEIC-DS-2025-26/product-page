@@ -56,8 +56,8 @@ describe('ProductDetail Integration', () => {
 
   test('mostra o indicador de loading inicial', async () => {
     (global as any).fetch = jest.fn(() => new Promise(() => {}));
-    render(<ProductDetail />);
-    expect(screen.getByText(/A carregar \(API\)/i)).toBeInTheDocument();
+    render(<ProductDetail productId={32863784} />);
+    expect(screen.getByText(/A carregar produto/i)).toBeInTheDocument();
   });
 
   test('renderiza os dados corretamente (Happy Path)', async () => {
@@ -71,7 +71,7 @@ describe('ProductDetail Integration', () => {
       });
     });
 
-    render(<ProductDetail />);
+    render(<ProductDetail productId={32863784} />);
 
     await screen.findByRole('heading', { name: /Galo de Barcelos/i, level: 1 });
     const descriptions = await screen.findAllByText(/Uma história rica e colorida/i);
@@ -79,14 +79,12 @@ describe('ProductDetail Integration', () => {
     expect(screen.getByText('25.50 €')).toBeInTheDocument();
   });
 
-  test('mostra mensagem de erro (404) após retries', async () => {
+  test('mostra mock de "Produto não encontrado" se falhar em todas as fontes', async () => {
     (global as any).fetch = jest.fn((url: any) => {
-      // Reviews OK para não crashar
       if (url.toString().includes('/reviews')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
       
-      // Produto falha com 404
       return Promise.resolve({
         ok: false,
         status: 404,
@@ -94,14 +92,14 @@ describe('ProductDetail Integration', () => {
       });
     });
 
-    render(<ProductDetail />);
-
-    // CORREÇÃO: Aumentamos o timeout para 6000ms (6s).
-    // O componente faz retries (1s + 1.5s + ...) antes de mostrar o erro.
-    const errorMsg = await screen.findByText(/Erro/i, {}, { timeout: 6000 });
-    expect(errorMsg).toBeInTheDocument();
+    render(<ProductDetail productId={99999} />);
+  const notFoundTitle = await screen.findByRole('heading', { 
+      name: /Produto não encontrado/i, 
+      level: 1 
+    });
+    expect(notFoundTitle).toBeInTheDocument();
     
-    expect(screen.getByText(/404/i)).toBeInTheDocument();
+    expect(screen.getByText(/O produto que está a tentar aceder não existe/i)).toBeInTheDocument();
   });
 
   test('troca a imagem principal ao clicar na miniatura', async () => {
@@ -115,7 +113,7 @@ describe('ProductDetail Integration', () => {
       });
     });
 
-    render(<ProductDetail />);
+    render(<ProductDetail productId={32863784} />);
 
     await screen.findByRole('heading', { name: /Galo de Barcelos/i });
 
