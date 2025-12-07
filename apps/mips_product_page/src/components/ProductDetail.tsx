@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
+import Grid from '@mui/material/Grid'; 
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
@@ -10,10 +10,11 @@ import { useTheme } from '@mui/material/styles';
 import SafeComponent from './SafeComponent';
 import { JumpsellerReview } from '../services/jumpsellerApi';
 
-export const API_BASE_URL = "https://api.madeinportugal.store/api";
+// export const API_BASE_URL = 'http://localhost:3002/api';
+export const API_BASE_URL = 'https://api.madeinportugal.store/api';
 
 const ProductReviews = React.lazy(
-  () => import("mips_reviews/ProductReviews")
+  () => import('mips_reviews/ProductReviews'),
 );
 
 type ProductSpecification = {
@@ -63,17 +64,25 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
   return {
     id: product.id,
     title: product.name || 'Produto sem nome',
-    storytelling: stripHtmlTags(product.description || 'Descrição não disponível.'),
-    description: stripHtmlTags(product.description || 'Descrição não disponível.'),
-    price: typeof product.price === 'number' ? product.price : parseFloat(product.price || '0'),
-    avg_score: 0,       
-    reviewCount: 0,    
-    photos: product.images && product.images.length > 0
-      ? product.images.map((img: any) => ({
-          photo_url: img.url,
-          alt_text: img.description || product.name,
-        }))
-      : [],
+    storytelling: stripHtmlTags(
+      product.description || 'Descrição não disponível.',
+    ),
+    description: stripHtmlTags(
+      product.description || 'Descrição não disponível.',
+    ),
+    price:
+      typeof product.price === 'number'
+        ? product.price
+        : parseFloat(product.price || '0'),
+    avg_score: 0,
+    reviewCount: 0,
+    photos:
+      product.images && product.images.length > 0
+        ? product.images.map((img: any) => ({
+            photo_url: img.url,
+            alt_text: img.description || product.name,
+          }))
+        : [],
     mainPhoto: product.images?.[0]
       ? {
           photo_url: product.images[0].url,
@@ -96,8 +105,8 @@ const renderStars = (score: number) =>
         key={i}
         viewBox="0 0 24 24"
         style={{
-          width: 32,  
-          height: 32,  
+          width: 32,
+          height: 32,
           marginRight: 4,
           display: 'block',
         }}
@@ -122,12 +131,11 @@ const renderStars = (score: number) =>
           d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
           fill={full ? '#FFC107' : 'none'}
           stroke="black"
-          strokeWidth={1.4}   
+          strokeWidth={1.4}
         />
       </svg>
     );
   });
-
 
 interface ProductDetailProps {
   productId?: string | number;
@@ -139,23 +147,33 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null);
+  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(
+    null,
+  );
 
-  const [source, setSource] = useState<'jumpseller' | 'database'>('jumpseller');
+  const [source, setSource] = useState<'jumpseller' | 'database'>(
+    'jumpseller',
+  );
 
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
   const targetId = productId || 32863784;
 
+  const lastSyncedCountRef = useRef(0);
+
   const toggleSource = () => {
-    setSource(prev => prev === 'jumpseller' ? 'database' : 'jumpseller');
+    setSource((prev) => (prev === 'jumpseller' ? 'database' : 'jumpseller'));
   };
 
   useEffect(() => {
     let isMounted = true;
 
-    const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<Response> => {
+    const fetchWithRetry = async (
+      url: string,
+      retries = 3,
+      delay = 1000,
+    ): Promise<Response> => {
       try {
         const res = await fetch(url);
         if (!res.ok) {
@@ -165,8 +183,10 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
         return res;
       } catch (err) {
         if (retries > 0) {
-          console.warn(`⚠️ Falhou. A tentar de novo em ${delay}ms... (Restam ${retries})`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          console.warn(
+            `Falhou. A tentar de novo em ${delay}ms... (Restam ${retries})`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
           return fetchWithRetry(url, retries - 1, delay * 1.5);
         }
         throw err;
@@ -178,31 +198,38 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
       setLoading(true);
       setError(null);
 
-      console.log(`🔄 Fetching product ${targetId} using source: ${source.toUpperCase()}`);
+      console.log(
+        `Fetching product ${targetId} using source: ${source.toUpperCase()}`,
+      );
 
       try {
         if (source === 'jumpseller') {
-          const res = await fetchWithRetry(`${API_BASE_URL}/products/${targetId}`);
+          const res = await fetchWithRetry(
+            `${API_BASE_URL}/products/${targetId}`,
+          );
           const rawData = await res.json();
 
           if (isMounted) {
             const mapped = mapJumpsellerToProduct(rawData);
             setProduct(mapped);
           }
-
         } else {
-          const res = await fetch(`${API_BASE_URL}/products/jumpseller/${targetId}`);
+          const res = await fetch(
+            `${API_BASE_URL}/products/jumpseller/${targetId}`,
+          );
 
-          if (!res.ok) throw new Error('Produto não encontrado na Base de Dados (Sincronize primeiro!)');
+          if (!res.ok)
+            throw new Error(
+              'Produto não encontrado na Base de Dados (Sincronize primeiro!)',
+            );
           const dbData = await res.json();
 
           if (isMounted) {
             setProduct(dbData as ProductFromApi);
           }
         }
-
       } catch (err: any) {
-        console.error('❌ Fetch failed:', err);
+        console.error('Fetch failed:', err);
         if (isMounted) setError(err.message);
       } finally {
         if (isMounted) setLoading(false);
@@ -211,7 +238,9 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
 
     fetchProduct();
 
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [source, targetId]);
 
   useEffect(() => {
@@ -220,7 +249,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
 
     const container = document.getElementById('mips-reviews-wrapper');
     if (!container) {
-      console.warn('⚠️ mips-reviews-wrapper não encontrado no DOM');
+      console.warn('mips-reviews-wrapper não encontrado no DOM');
       return;
     }
 
@@ -231,13 +260,17 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
         if (!text) continue;
 
         const match = text.match(
-          /(\d+(?:\.\d+)?)\s*\((\d+)\s*(reviews?|review|avaliações?|avaliação)\)/i
+          /(\d+(?:\.\d+)?)\s*\((\d+)\s*(reviews?|review|avaliações?|avaliação)\)/i,
         );
         if (match) {
           const avg = Number(match[1]);
           const count = Number(match[2]);
           if (!Number.isNaN(avg) && !Number.isNaN(count)) {
-            console.log('✅ Review summary encontrado no DOM:', { avg, count, raw: text });
+            console.log('Review summary encontrado no DOM:', {
+              avg,
+              count,
+              raw: text,
+            });
             setReviewSummary({ average: avg, count });
             return;
           }
@@ -262,12 +295,73 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
     };
   }, [product?.id]);
 
-  // Loading State
+  useEffect(() => {
+    if (!product?.id) return;
+    if (!reviewSummary) return;
+
+    if (lastSyncedCountRef.current === reviewSummary.count) return;
+
+    const syncRating = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/products/${product.id}/rating`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              avg_score: reviewSummary.average,
+              review_count: reviewSummary.count,
+            }),
+          },
+        );
+
+        if (!res.ok) {
+          console.error('Erro ao sincronizar rating:', res.status);
+          return;
+        }
+
+        console.log('Rating sincronizado com a API (Nova alteração detetada)', {
+          productId: product.id,
+          ...reviewSummary,
+        });
+        
+        lastSyncedCountRef.current = reviewSummary.count;
+
+      } catch (err) {
+        console.error('Falha ao sincronizar rating com a API', err);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      syncRating();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [product?.id, reviewSummary]);
+
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', flexDirection: 'column', gap: 3 }}>
-        <CircularProgress size={60} thickness={4} sx={{ color: '#344E41' }} />
-        <Typography variant="h6" sx={{ color: '#344E41', fontWeight: 500 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '60vh',
+          flexDirection: 'column',
+          gap: 3,
+        }}
+      >
+        <CircularProgress
+          size={60}
+          thickness={4}
+          sx={{ color: '#344E41' }}
+        />
+        <Typography
+          variant="h6"
+          sx={{ color: '#344E41', fontWeight: 500 }}
+        >
           A carregar ({source === 'jumpseller' ? 'API' : 'BD'})...
         </Typography>
       </Box>
@@ -277,29 +371,50 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
   // Error State
   if (error || !product) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh', flexDirection: 'column', gap: 2 }}>
-        <Typography variant="h5" color="error" sx={{ fontWeight: 'bold' }}>❌ Erro ({source})</Typography>
-        <Typography variant="body1" color="error">{error}</Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '40vh',
+          flexDirection: 'column',
+          gap: 2,
+        }}
+      >
+        <Typography variant="h5" color="error" sx={{ fontWeight: 'bold' }}>
+          Erro ({source})
+        </Typography>
+        <Typography variant="body1" color="error">
+          {error}
+        </Typography>
         <Button variant="outlined" onClick={toggleSource} sx={{ mt: 2 }}>
-          Tentar mudar para {source === 'jumpseller' ? 'Base de Dados' : 'Jumpseller API'}
+          Tentar mudar para{' '}
+          {source === 'jumpseller' ? 'Base de Dados' : 'Jumpseller API'}
         </Button>
       </Box>
     );
   }
 
   const photos = product.photos || [];
-
   const effectiveAvgScore = reviewSummary?.average ?? 0;
   const effectiveReviewCount = reviewSummary?.count ?? 0;
 
   const ratingLabel =
     effectiveReviewCount > 0
-      ? `${effectiveAvgScore.toFixed(1)} (${effectiveReviewCount} review${effectiveReviewCount > 1 ? 's' : ''})`
+      ? `${effectiveAvgScore.toFixed(1)} (${effectiveReviewCount} review${
+          effectiveReviewCount > 1 ? 's' : ''
+        })`
       : null;
 
   return (
     <Box sx={{ py: { xs: 2, sm: 3 } }}>
-      <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 } }}>
+      <Box
+        sx={{
+          maxWidth: 1200,
+          mx: 'auto',
+          px: { xs: 1.5, sm: 3, md: 0 },
+        }}
+      >
         <Box
           sx={{
             bgcolor: '#E4E1D6',
@@ -313,7 +428,10 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
             container
             columnSpacing={{ xs: 2, md: 2 }}
             rowSpacing={isSmallScreen ? 2 : 0}
-            sx={{ alignItems: 'strech', flexWrap: { xs: 'wrap', md: 'nowrap' } }}
+            sx={{
+              alignItems: 'strech',
+              flexWrap: { xs: 'wrap', md: 'nowrap' },
+            }}
           >
             <Grid
               item
@@ -357,7 +475,9 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                       product.mainPhoto?.photo_url ||
                       '/placeholder.png'
                     }
-                    alt={photos[selectedPhotoIndex]?.alt_text || product.title}
+                    alt={
+                      photos[selectedPhotoIndex]?.alt_text || product.title
+                    }
                     sx={{
                       width: '100%',
                       height: '100%',
@@ -576,25 +696,30 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                             gap: 0.75,
                           }}
                         >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.3,
+                            }}
+                          >
                             {renderStars(effectiveAvgScore)}
                           </Box>
                           <Typography
-                          variant="body2"
-                          sx={{
-                            fontSize: { xs: '1.05rem', sm: '1.1rem' }, 
-                            fontWeight: 700,
-                            color: 'black',                           
-                            whiteSpace: 'nowrap',
-                            display: 'flex',
-                            alignItems: 'center',                     
-                            lineHeight: 1,                            
-                            mt: '2px',                               
-                          }}
-                        >
-                          {ratingLabel}
-                        </Typography>
-
+                            variant="body2"
+                            sx={{
+                              fontSize: { xs: '1.05rem', sm: '1.1rem' },
+                              fontWeight: 700,
+                              color: 'black',
+                              whiteSpace: 'nowrap',
+                              display: 'flex',
+                              alignItems: 'center',
+                              lineHeight: 1,
+                              mt: '2px',
+                            }}
+                          >
+                            {ratingLabel}
+                          </Typography>
                         </Box>
                       ) : (
                         <Typography
@@ -609,7 +734,6 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                         </Typography>
                       )}
                     </Box>
-
                   </Box>
                 </Box>
 

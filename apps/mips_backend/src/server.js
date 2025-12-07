@@ -7,13 +7,9 @@ import { PrismaClient } from '@prisma/client';
 dotenv.config();
 
 const app = express();
-// Usa a porta definida ou 3002 (para não conflitar com frontend se correr local)
 const PORT = process.env.PORT || 3002;
 const prisma = new PrismaClient();
 
-// =====================================================
-// 1. MIDDLEWARE
-// =====================================================
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -21,10 +17,6 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
-// =====================================================
-// 2. CLIENTES E HELPERS
-// =====================================================
 
 const jumpsellerClient = axios.create({
   baseURL: 'https://api.jumpseller.com/v1',
@@ -42,16 +34,12 @@ const stripHtmlTags = (html) => {
   return String(html).replace(/<[^>]*>/g, '');
 };
 
-// =====================================================
-// 3. FUNÇÕES DE SINCRONIZAÇÃO
-// =====================================================
-
 async function fetchAllProducts() {
   const allProducts = [];
   let page = 1;
   let hasMore = true;
 
-  console.log('📦 Fetching products from Jumpseller...');
+  console.log('Fetching products from Jumpseller...');
 
   while (hasMore) {
     try {
@@ -64,18 +52,18 @@ async function fetchAllProducts() {
       if (products && products.length > 0) {
         const unwrappedProducts = products.map((p) => p.product || p);
         allProducts.push(...unwrappedProducts);
-        console.log(`   ✅ Fetched page ${page}: ${unwrappedProducts.length} products`);
+        console.log(`Fetched page ${page}: ${unwrappedProducts.length} products`);
         page++;
       } else {
         hasMore = false;
       }
     } catch (error) {
-      console.error(`   ❌ Error fetching products page ${page}:`, error.message);
+      console.error(`Error fetching products page ${page}:`, error.message);
       hasMore = false;
     }
   }
 
-  console.log(`✅ Total products fetched: ${allProducts.length}\n`);
+  console.log(`Total products fetched: ${allProducts.length}\n`);
   return allProducts;
 }
 
@@ -96,7 +84,7 @@ async function fetchProductReviews(productId) {
     if (error.response?.status === 404) {
       return [];
     }
-    console.error(`   ⚠️ Error fetching reviews for product ${productId}:`, error.message);
+    console.error(`Error fetching reviews for product ${productId}:`, error.message);
     return [];
   }
 }
@@ -116,7 +104,7 @@ function calculateAverageRating(reviews) {
 }
 
 async function syncToDatabase() {
-  console.log('\n🔄 Starting Jumpseller → Database Sync\n');
+  console.log('\nStarting Jumpseller → Database Sync\n');
   
   try {
     let defaultUser = await prisma.user.findUnique({
@@ -124,7 +112,7 @@ async function syncToDatabase() {
     });
 
     if (!defaultUser) {
-      console.log('📝 Creating default system user...');
+      console.log('Creating default system user...');
       defaultUser = await prisma.user.create({
         data: {
           username: 'jumpseller_system',
@@ -139,7 +127,7 @@ async function syncToDatabase() {
     const jumpsellerProducts = await fetchAllProducts();
 
     if (jumpsellerProducts.length === 0) {
-      console.log('⚠️ No products found in Jumpseller\n');
+      console.log('No products found in Jumpseller\n');
       return { success: true, message: "No products found" };
     }
 
@@ -148,7 +136,7 @@ async function syncToDatabase() {
     let reviewsCreated = 0;
 
     for (const jsProduct of jumpsellerProducts) {
-      console.log(`\n📦 Processing: ${jsProduct.name}`);
+      console.log(`\nProcessing: ${jsProduct.name}`);
 
       const reviews = await fetchProductReviews(jsProduct.id);
       const avgScore = calculateAverageRating(reviews);
@@ -160,7 +148,27 @@ async function syncToDatabase() {
           }))
         : [];
 
-      const price = parseFloat(jsProduct.price);
+      let price = parseFloat(jsProduct.price);
+      if (isNaN(price)) price = 0;
+      
+      const MAX_DB_PRICE = 99999999.99;
+      if (price > MAX_DB_PRICE) {
+        console.warn(`ALERTA: Preço excessivo detectado no ID ${jsProduct.id}. Corrigido para ${MAX_DB_PRICE}.`);
+        price = MAX_DB_PRICE;
+      }
+
+      let finalSku = jsProduct.sku || `JS-${jsProduct.id}`;
+      
+      const conflictingProduct = await prisma.product.findUnique({
+        where: { sku: finalSku }
+      });
+
+      if (conflictingProduct && conflictingProduct.jumpseller_id !== jsProduct.id) {
+        console.warn(`SKU Duplicado: "${finalSku}" já pertence ao produto ${conflictingProduct.jumpseller_id}.`);
+        finalSku = `${finalSku}-DUP-${jsProduct.id}`;
+        console.warn(`SKU renomeado para: "${finalSku}" para permitir sync.`);
+      }
+      // ------------------------------------------------
 
       const existingProduct = await prisma.product.findUnique({
         where: { jumpseller_id: jsProduct.id },
@@ -172,8 +180,8 @@ async function syncToDatabase() {
         title: jsProduct.name || 'Untitled Product',
         description: stripHtmlTags(jsProduct.description || ''),
         storytelling: stripHtmlTags(jsProduct.description || ''),
-        price: isNaN(price) ? 0 : price,
-        sku: jsProduct.sku || `JS-${jsProduct.id}`,
+        price: price,
+        sku: finalSku, 
         stock: jsProduct.stock || 0,
         permalink: jsProduct.permalink || '',
         avg_score: avgScore,
@@ -240,36 +248,52 @@ async function syncToDatabase() {
             });
             reviewsCreated++;
           } catch (reviewError) {
-            console.error(`   ❌ Failed to create review:`, reviewError.message);
+            console.error(`Failed to create review:`, reviewError.message);
           }
         }
       }
     }
 
-    console.log(`✅ Sync Complete! Created: ${productsCreated}, Updated: ${productsUpdated}`);
+    console.log(`Sync Complete! Created: ${productsCreated}, Updated: ${productsUpdated}`);
     return { success: true, productsCreated, productsUpdated };
 
   } catch (error) {
-    console.error('\n❌ Sync failed:', error.message);
+    console.error('\nSync failed:', error.message);
     return { success: false, error: error.message };
   }
 }
-
-// =====================================================
-// 4. ROTAS DA API
-// =====================================================
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is running' });
 });
 
 app.post('/api/sync', async (req, res) => {
-  console.log('\n📡 Manual sync requested via API endpoint');
+  console.log('\nManual sync requested via API endpoint');
   const result = await syncToDatabase();
   res.json(result);
 });
 
-// Jumpseller Proxy by SKU
+app.put('/api/products/:jumpsellerId/rating', async (req, res) => {
+  try {
+    const jumpsellerId = parseInt(req.params.jumpsellerId);
+    const { avg_score, review_count } = req.body;
+
+    console.log(`Updating rating for product ${jumpsellerId}: ${avg_score} stars (${review_count} reviews)`);
+
+    const updated = await prisma.product.update({
+      where: { jumpseller_id: jumpsellerId },
+      data: {
+        avg_score: avg_score,
+      },
+    });
+
+    res.json({ success: true, product: updated });
+  } catch (error) {
+    console.error('Failed to update rating:', error.message);
+    res.status(500).json({ error: 'Failed to update rating' });
+  }
+});
+
 app.get('/api/products/sku/:sku', async (req, res) => {
   try {
     const { sku } = req.params;
@@ -285,7 +309,6 @@ app.get('/api/products/sku/:sku', async (req, res) => {
   }
 });
 
-// Database by Jumpseller ID
 app.get('/api/products/jumpseller/:jumpsellerProductId', async (req, res) => {
   try {
     const jumpsellerProductId = parseInt(req.params.jumpsellerProductId);
@@ -361,7 +384,6 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// Generic catch-all last
 app.get('/api/products/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -372,9 +394,6 @@ app.get('/api/products/:id', async (req, res) => {
   }
 });
 
-// =====================================================
-// 5. START
-// =====================================================
 app.listen(PORT, async () => {
   console.log(`🚀 Backend running on port ${PORT}`);
   await syncToDatabase();
