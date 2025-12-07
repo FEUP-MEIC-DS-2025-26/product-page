@@ -186,6 +186,7 @@ async function syncToDatabase() {
         permalink: jsProduct.permalink || '',
         avg_score: avgScore,
         specifications: specifications,
+        brand: jsProduct.brand || null,
       };
 
       if (existingProduct) {
