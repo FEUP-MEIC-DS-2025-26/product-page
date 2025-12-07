@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid'; 
+import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
@@ -45,6 +45,12 @@ type ReviewSummary = {
   average: number;
   count: number;
 };
+
+interface ProductDetailProps {
+  productId?: string | number;
+}
+
+const NOT_FOUND_IMAGE = '/product-not-found.png';
 
 const stripHtmlTags = (html: string): string => {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -94,6 +100,21 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
   };
 };
 
+const MOCK_PRODUCT: ProductFromApi = {
+  id: 0,
+  title: 'This product does not exist',
+  storytelling: null,
+  description:
+    'O produto que está a tentar aceder não existe, foi removido ou o link está incorreto.',
+  price: 0,
+  avg_score: 0,
+  reviewCount: 0,
+  mainPhoto: null,
+  photos: [],
+  specifications: [],
+  brand: null,
+};
+
 const renderStars = (score: number) =>
   Array.from({ length: 5 }, (_, i) => {
     const id = `star-half-clip-${i}`;
@@ -137,10 +158,6 @@ const renderStars = (score: number) =>
     );
   });
 
-interface ProductDetailProps {
-  productId?: string | number;
-}
-
 export default function ProductDetail({ productId }: ProductDetailProps) {
   const [product, setProduct] = useState<ProductFromApi | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
@@ -155,10 +172,12 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
     'jumpseller',
   );
 
+  const [isNotFound, setIsNotFound] = useState(false);
+
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
-  const targetId = productId || 32863784;
+  const targetId = productId ?? null;
 
   const lastSyncedCountRef = useRef(0);
 
@@ -177,7 +196,15 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
       try {
         const res = await fetch(url);
         if (!res.ok) {
-          if (res.status === 404) throw new Error('404 Not Found');
+          if (res.status === 404) {
+            if (isMounted) {
+              setIsNotFound(true);
+              setProduct(MOCK_PRODUCT);
+              setError(null);
+              setLoading(false);
+            }
+            throw new Error('404 Not Found (handled)');
+          }
           throw new Error(`Erro API: ${res.status}`);
         }
         return res;
@@ -195,8 +222,20 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
 
     const fetchProduct = async () => {
       if (!isMounted) return;
+
       setLoading(true);
       setError(null);
+      setIsNotFound(false);
+      setProduct(null);
+
+      if (!targetId) {
+        if (isMounted) {
+          setIsNotFound(true);
+          setProduct(MOCK_PRODUCT);
+          setLoading(false);
+        }
+        return;
+      }
 
       console.log(
         `Fetching product ${targetId} using source: ${source.toUpperCase()}`,
@@ -218,10 +257,19 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
             `${API_BASE_URL}/products/jumpseller/${targetId}`,
           );
 
-          if (!res.ok)
+          if (!res.ok) {
+            if (res.status === 404) {
+              if (isMounted) {
+                setIsNotFound(true);
+                setProduct(MOCK_PRODUCT);
+                setLoading(false);
+              }
+              return;
+            }
             throw new Error(
               'Produto não encontrado na Base de Dados (Sincronize primeiro!)',
             );
+          }
           const dbData = await res.json();
 
           if (isMounted) {
@@ -229,8 +277,12 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
           }
         }
       } catch (err: any) {
-        console.error('Fetch failed:', err);
-        if (isMounted) setError(err.message);
+        if (err?.message?.includes('404 Not Found (handled)')) {
+          console.info('404 tratado com MOCK_PRODUCT');
+        } else {
+          console.error('Fetch failed:', err);
+          if (isMounted) setError(err.message || 'Erro ao carregar produto');
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -246,6 +298,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!product?.id) return;
+    if (isNotFound || product.id === 0) return;
 
     const container = document.getElementById('mips-reviews-wrapper');
     if (!container) {
@@ -293,11 +346,12 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
     return () => {
       observer.disconnect();
     };
-  }, [product?.id]);
+  }, [product?.id, isNotFound]);
 
   useEffect(() => {
     if (!product?.id) return;
     if (!reviewSummary) return;
+    if (isNotFound || product.id === 0) return;
 
     if (lastSyncedCountRef.current === reviewSummary.count) return;
 
@@ -326,9 +380,8 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
           productId: product.id,
           ...reviewSummary,
         });
-        
-        lastSyncedCountRef.current = reviewSummary.count;
 
+        lastSyncedCountRef.current = reviewSummary.count;
       } catch (err) {
         console.error('Falha ao sincronizar rating com a API', err);
       }
@@ -339,7 +392,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [product?.id, reviewSummary]);
+  }, [product?.id, reviewSummary, isNotFound]);
 
   if (loading) {
     return (
@@ -353,11 +406,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
           gap: 3,
         }}
       >
-        <CircularProgress
-          size={60}
-          thickness={4}
-          sx={{ color: '#344E41' }}
-        />
+        <CircularProgress size={60} thickness={4} sx={{ color: '#344E41' }} />
         <Typography
           variant="h6"
           sx={{ color: '#344E41', fontWeight: 500 }}
@@ -368,8 +417,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
     );
   }
 
-  // Error State
-  if (error || !product) {
+  if (error && !isNotFound && !product) {
     return (
       <Box
         sx={{
@@ -395,6 +443,10 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
     );
   }
 
+  if (!product) {
+    return null;
+  }
+
   const photos = product.photos || [];
   const effectiveAvgScore = reviewSummary?.average ?? 0;
   const effectiveReviewCount = reviewSummary?.count ?? 0;
@@ -405,6 +457,22 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
           effectiveReviewCount > 1 ? 's' : ''
         })`
       : null;
+
+  const isMock = isNotFound || product.id === 0;
+
+  const mainImageSrc = isMock
+    ? NOT_FOUND_IMAGE
+    : photos[selectedPhotoIndex]?.photo_url ||
+      product.mainPhoto?.photo_url ||
+      '/placeholder.png';
+
+  const mainImageAlt = isMock
+    ? 'Product not found'
+    : photos[selectedPhotoIndex]?.alt_text || product.title;
+
+  const displayPrice = isMock
+    ? '0.00'
+    : Number(product.price).toFixed(2);
 
   return (
     <Box sx={{ py: { xs: 2, sm: 3 } }}>
@@ -470,25 +538,22 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                 >
                   <Box
                     component="img"
-                    src={
-                      photos[selectedPhotoIndex]?.photo_url ||
-                      product.mainPhoto?.photo_url ||
-                      '/placeholder.png'
-                    }
-                    alt={
-                      photos[selectedPhotoIndex]?.alt_text || product.title
-                    }
+                    src={mainImageSrc}
+                    alt={mainImageAlt}
                     sx={{
                       width: '100%',
                       height: '100%',
                       objectFit: 'contain',
                     }}
                     onError={(e: any) => {
-                      e.currentTarget.src = '/placeholder.png';
+                      e.currentTarget.src = isMock
+                        ? NOT_FOUND_IMAGE
+                        : '/placeholder.png';
                     }}
                   />
                 </Box>
-                {photos.length > 1 && (
+
+                {!isMock && photos.length > 1 && (
                   <Box
                     sx={{
                       display: 'flex',
@@ -583,14 +648,15 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                             lg: '2.5rem',
                           },
                           fontWeight: 'bold',
-                          color: '#344E41',
+                          color: isMock ? '#8B0000' : '#344E41',
                           lineHeight: 1.1,
                           wordBreak: 'break-word',
                         }}
                       >
-                        {product.title}
+                        {isMock ? 'Produto não encontrado' : product.title}
                       </Typography>
-                      {product.brand && (
+
+                      {product.brand && !isMock && (
                         <Typography
                           variant="subtitle1"
                           sx={{
@@ -604,33 +670,50 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                           {product.brand}
                         </Typography>
                       )}
+
+                      {isMock && (
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            color: '#6B7280',
+                            mt: 0.6,
+                            fontSize: { xs: '1.02rem', sm: '1.08rem' },
+                          }}
+                        >
+                          Verifique se o link está correto ou explore outros
+                          produtos em madeinportugal.store.
+                        </Typography>
+                      )}
                     </Box>
-                    <IconButton
-                      aria-label="Adicionar à wishlist"
-                      sx={{
-                        p: 1,
-                        '&:hover': {
-                          transform: 'scale(1.05)',
-                          '& svg': { fill: '#344E41' },
-                        },
-                        flexShrink: 0,
-                      }}
-                    >
-                      <svg
-                        width="40"
-                        height="40"
-                        fill="none"
-                        stroke="#344E41"
-                        strokeWidth={2.2}
-                        viewBox="0 0 24 24"
+
+                    {!isMock && (
+                      <IconButton
+                        aria-label="Adicionar à wishlist"
+                        sx={{
+                          p: 1,
+                          '&:hover': {
+                            transform: 'scale(1.05)',
+                            '& svg': { fill: '#344E41' },
+                          },
+                          flexShrink: 0,
+                        }}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                        />
-                      </svg>
-                    </IconButton>
+                        <svg
+                          width="40"
+                          height="40"
+                          fill="none"
+                          stroke="#344E41"
+                          strokeWidth={2.2}
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                          />
+                        </svg>
+                      </IconButton>
+                    )}
                   </Box>
 
                   <Box
@@ -672,12 +755,12 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                           lg: '2.5rem',
                         },
                         fontWeight: 'bold',
-                        color: 'black',
+                        color: isMock ? '#6B7280' : 'black',
                         whiteSpace: 'nowrap',
                         flexShrink: 0,
                       }}
                     >
-                      {Number(product.price).toFixed(2)} €
+                      {displayPrice} €
                     </Typography>
 
                     <Box
@@ -688,7 +771,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                         flexWrap: 'wrap',
                       }}
                     >
-                      {effectiveReviewCount > 0 ? (
+                      {!isMock && effectiveReviewCount > 0 ? (
                         <Box
                           sx={{
                             display: 'inline-flex',
@@ -727,16 +810,19 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                           sx={{
                             fontSize: { xs: '1rem', sm: '1.1rem' },
                             fontWeight: 500,
-                            color: '#999',
+                            color: isMock ? '#9CA3AF' : '#999',
                           }}
                         >
-                          Sem avaliações
+                          {isMock
+                            ? 'Reviews indisponíveis para este produto'
+                            : 'Sem avaliações'}
                         </Typography>
                       )}
                     </Box>
                   </Box>
                 </Box>
 
+                {/* Botões – aparecem sempre, mas ficam desativados no mock */}
                 <Box
                   sx={{
                     display: 'flex',
@@ -749,6 +835,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                 >
                   <Button
                     variant="contained"
+                    disabled={isMock}
                     sx={{
                       width: { xs: '100%', sm: 'auto' },
                       minWidth: 160,
@@ -758,11 +845,21 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                       borderRadius: '12px',
                       fontWeight: 'bold',
                       fontSize: { xs: '0.98rem', sm: '1.05rem' },
-                      '&:hover': { bgcolor: '#A3B18A', color: 'black' },
+                      '&:hover': {
+                        bgcolor: isMock ? '#344E41' : '#A3B18A',
+                        color: isMock ? 'white' : 'black',
+                      },
+                      opacity: isMock ? 0.5 : 1,
+                      cursor: isMock ? 'not-allowed' : 'pointer',
                       gap: 1.5,
                       boxShadow:
                         '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
                     }}
+                    title={
+                      isMock
+                        ? 'Não é possível comprar um produto que não existe.'
+                        : undefined
+                    }
                   >
                     <svg
                       width="24"
@@ -782,6 +879,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                   </Button>
                   <Button
                     variant="contained"
+                    disabled={isMock}
                     sx={{
                       width: { xs: '100%', sm: 'auto' },
                       bgcolor: '#588157',
@@ -791,11 +889,21 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                       borderRadius: '12px',
                       fontWeight: 'bold',
                       fontSize: { xs: '0.98rem', sm: '1.05rem' },
-                      '&:hover': { bgcolor: '#A3B18A', color: 'black' },
+                      '&:hover': {
+                        bgcolor: isMock ? '#588157' : '#A3B18A',
+                        color: isMock ? 'white' : 'black',
+                      },
+                      opacity: isMock ? 0.5 : 1,
+                      cursor: isMock ? 'not-allowed' : 'pointer',
                       gap: 1.5,
                       boxShadow:
                         '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
                     }}
+                    title={
+                      isMock
+                        ? 'Não é possível contactar vendedor para um produto que não existe.'
+                        : undefined
+                    }
                   >
                     <svg
                       width="24"
@@ -835,7 +943,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                 fontSize: { xs: '1.2rem', sm: '1.35rem' },
               }}
             >
-              História do Produto
+              {isMock ? 'Produto não encontrado' : 'História do Produto'}
             </Typography>
             <Typography
               variant="body1"
@@ -847,7 +955,9 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                 lineHeight: 1.7,
               }}
             >
-              {product.description}
+              {isMock
+                ? 'Não conseguimos encontrar este produto. Ele pode ter sido removido ou nunca ter existido. Experimente navegar pelas categorias ou utilizar a barra de pesquisa para encontrar algo semelhante.'
+                : product.description}
             </Typography>
           </Box>
         </Box>
@@ -857,7 +967,7 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
         />
       </Box>
 
-      {product.specifications && product.specifications.length > 0 && (
+      {!isMock && product.specifications && product.specifications.length > 0 && (
         <ProductSpecifications data={product.specifications} />
       )}
 
@@ -881,11 +991,41 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
             bgcolor: '#E4E1D6',
             borderRadius: '16px',
             p: { xs: 2.5, sm: 3, md: 3.5 },
+            position: 'relative',
           }}
         >
-          <SafeComponent>
-            <ProductReviews productId={product.id} customerId={18005446} />
-          </SafeComponent>
+          {isMock ? (
+            <Box
+              sx={{
+                textAlign: 'center',
+                py: 4,
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 'bold',
+                  color: '#4B5563',
+                  mb: 1,
+                }}
+              >
+                Reviews indisponíveis para este produto
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: '#6B7280',
+                  fontSize: { xs: '0.98rem', sm: '1.02rem' },
+                }}
+              >
+                Não é possível avaliar ou comentar um produto que não existe.
+              </Typography>
+            </Box>
+          ) : (
+            <SafeComponent>
+              <ProductReviews productId={product.id} customerId={18005446} />
+            </SafeComponent>
+          )}
         </Box>
       </Box>
 
