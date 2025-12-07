@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid'; 
+import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
@@ -8,7 +8,6 @@ import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import SafeComponent from './SafeComponent';
-import { JumpsellerReview } from '../services/jumpsellerApi';
 
 export const API_BASE_URL = 'https://api.madeinportugal.store/api';
 
@@ -28,7 +27,6 @@ type ProductPhoto = {
 
 type ProductFromApi = {
   id: number;
-  external_id: number;
   title: string;
   storytelling: string | null;
   description: string | null;
@@ -46,7 +44,14 @@ type ReviewSummary = {
   count: number;
 };
 
+interface ProductDetailProps {
+  productId?: string | number;
+}
+
+const NOT_FOUND_IMAGE = '/product-not-found.png';
+
 const stripHtmlTags = (html: string): string => {
+  if (typeof window === 'undefined') return html || '';
   const doc = new DOMParser().parseFromString(html, 'text/html');
   return doc.body.textContent || '';
 };
@@ -63,7 +68,6 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
 
   return {
     id: product.id,
-    external_id: product.external_id || product.id,
     title: product.name || 'Produto sem nome',
     storytelling: stripHtmlTags(
       product.description || 'Descrição não disponível.',
@@ -93,6 +97,21 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
     specifications: customFieldsSpecs,
     brand: product.brand || null,
   };
+};
+
+const MOCK_PRODUCT: ProductFromApi = {
+  id: 0,
+  title: 'Produto não encontrado',
+  storytelling: null,
+  description:
+    'O produto que está a tentar aceder não existe, foi removido ou o link está incorreto. Verifique o endereço ou explore a nossa loja.',
+  price: 0,
+  avg_score: 0,
+  reviewCount: 0,
+  mainPhoto: null,
+  photos: [],
+  specifications: [],
+  brand: null,
 };
 
 const renderStars = (score: number) =>
@@ -127,7 +146,6 @@ const renderStars = (score: number) =>
             />
           </>
         )}
-
         <path
           d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
           fill={full ? '#FFC107' : 'none'}
@@ -138,171 +156,84 @@ const renderStars = (score: number) =>
     );
   });
 
-interface ProductDetailProps {
-  productId?: string | number;
-  buyerId?: number; 
-}
-
-export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailProps) {
+export default function ProductDetail({ productId }: ProductDetailProps) {
   const [product, setProduct] = useState<ProductFromApi | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null);
-  const [source, setSource] = useState<'jumpseller' | 'database'>('jumpseller');
-
-  const [isInWishlist, setIsInWishlist] = useState(false);
-  const [isWishlistLoading, setIsWishlistLoading] = useState(false);
+  const [isNotFound, setIsNotFound] = useState(false);
 
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
-
-  const targetId = productId || 32863784;
+  const targetId = productId ?? null;
   const lastSyncedCountRef = useRef(0);
-
-  const toggleSource = () => {
-    setSource((prev) => (prev === 'jumpseller' ? 'database' : 'jumpseller'));
-  };
-
-  useEffect(() => {
-    if (!product?.id || !buyerId) return;
-
-    const checkWishlist = async () => {
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/wishlist/check?buyerId=${buyerId}&externalId=${product.external_id}`,
-          {
-            method: 'GET',
-            mode: 'cors',
-            credentials: 'omit',
-          }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          setIsInWishlist(data.inWishlist);
-        }
-      } catch (error) {
-        console.error('Error checking wishlist:', error);
-      }
-    };
-
-    checkWishlist();
-  }, [product?.id, buyerId]);
-
-  // Toggle wishlist
-  const handleWishlistToggle = async () => {
-    if (!product?.id || !buyerId || isWishlistLoading) return;
-
-    setIsWishlistLoading(true);
-
-    try {
-      if (isInWishlist) {
-        // Remover da wishlist
-        const response = await fetch(
-          `${API_BASE_URL}/wishlist/remove?buyerId=${buyerId}&externalId=${product.external_id}`,
-          {
-            method: 'POST',
-            mode: 'cors',
-            credentials: 'omit',
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error('Failed to remove from wishlist');
-        }
-
-        setIsInWishlist(false);
-      } else {
-        const response = await fetch(
-          `${API_BASE_URL}/wishlist/add?buyerId=${buyerId}&externalId=${product.external_id}`,
-          {
-            method: 'POST',
-            mode: 'cors',
-            credentials: 'omit',
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error('Failed to add to wishlist');
-        }
-
-        setIsInWishlist(true);
-      }
-    } catch (error) {
-      console.error('Error toggling wishlist:', error);
-      alert('Falha ao atualizar a wishlist. Por favor, tente novamente.');
-    } finally {
-      setIsWishlistLoading(false);
-    }
-  };
 
   useEffect(() => {
     let isMounted = true;
 
-    const fetchWithRetry = async (
-      url: string,
-      retries = 3,
-      delay = 1000,
-    ): Promise<Response> => {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) {
-          if (res.status === 404) throw new Error('404 Not Found');
-          throw new Error(`Erro API: ${res.status}`);
-        }
-        return res;
-      } catch (err) {
-        if (retries > 0) {
-          console.warn(
-            `Falhou. A tentar de novo em ${delay}ms... (Restam ${retries})`,
-          );
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          return fetchWithRetry(url, retries - 1, delay * 1.5);
-        }
-        throw err;
-      }
-    };
-
     const fetchProduct = async () => {
       if (!isMounted) return;
+
       setLoading(true);
       setError(null);
+      setIsNotFound(false);
+      setProduct(null);
 
-      console.log(
-        `Fetching product ${targetId} using source: ${source.toUpperCase()}`,
-      );
+      if (!targetId) {
+        if (isMounted) {
+          setIsNotFound(true);
+          setProduct(MOCK_PRODUCT);
+          setLoading(false);
+        }
+        return;
+      }
+
+      console.log(`[ProductDetail] A iniciar procura para ID: ${targetId}`);
 
       try {
-        if (source === 'jumpseller') {
-          const res = await fetchWithRetry(
-            `${API_BASE_URL}/products/${targetId}`,
-          );
-          const rawData = await res.json();
+        let found = false;
 
-          if (isMounted) {
-            const mapped = mapJumpsellerToProduct(rawData);
-            setProduct(mapped);
+        try {
+          const res = await fetch(`${API_BASE_URL}/products/${targetId}`);
+          if (res.ok) {
+            const rawData = await res.json();
+            if (isMounted) {
+              const mapped = mapJumpsellerToProduct(rawData);
+              setProduct(mapped);
+              found = true;
+            }
           }
-        } else {
-          const res = await fetch(
-            `${API_BASE_URL}/products/jumpseller/${targetId}`,
-          );
+        } catch (jsError) {
+          console.warn('[ProductDetail] Erro ao contactar Jumpseller:', jsError);
+        }
 
-          if (!res.ok)
-            throw new Error(
-              'Produto não encontrado na Base de Dados (Sincronize primeiro!)',
-            );
-          const dbData = await res.json();
-
-          if (isMounted) {
-            setProduct(dbData as ProductFromApi);
+        if (!found) {
+          try {
+            const dbRes = await fetch(`${API_BASE_URL}/products/jumpseller/${targetId}`);
+            if (dbRes.ok) {
+              const dbData = await dbRes.json();
+              if (isMounted) {
+                setProduct(dbData as ProductFromApi);
+                found = true;
+              }
+            }
+          } catch (dbError) {
+            console.warn('[ProductDetail] Erro ao contactar DB:', dbError);
           }
         }
+
+        if (!found && isMounted) {
+          setIsNotFound(true);
+          setProduct(MOCK_PRODUCT);
+        }
+
       } catch (err: any) {
-        console.error('Fetch failed:', err);
-        if (isMounted) setError(err.message);
+        console.error('[ProductDetail] Erro crítico no fetch:', err);
+        if (isMounted) {
+          setIsNotFound(true);
+          setProduct(MOCK_PRODUCT);
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -313,17 +244,15 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
     return () => {
       isMounted = false;
     };
-  }, [source, targetId]);
+  }, [targetId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!product?.id) return;
+    if (isNotFound || product.id === 0) return;
 
     const container = document.getElementById('mips-reviews-wrapper');
-    if (!container) {
-      console.warn('mips-reviews-wrapper não encontrado no DOM');
-      return;
-    }
+    if (!container) return;
 
     const extractFromDom = () => {
       const paragraphs = Array.from(container.querySelectorAll('p'));
@@ -338,11 +267,6 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
           const avg = Number(match[1]);
           const count = Number(match[2]);
           if (!Number.isNaN(avg) && !Number.isNaN(count)) {
-            console.log('Review summary encontrado no DOM:', {
-              avg,
-              count,
-              raw: text,
-            });
             setReviewSummary({ average: avg, count });
             return;
           }
@@ -350,32 +274,24 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
       }
     };
 
-    const observer = new MutationObserver(() => {
-      extractFromDom();
-    });
-
+    const observer = new MutationObserver(extractFromDom);
     observer.observe(container, {
       childList: true,
       subtree: true,
       characterData: true,
     });
-
     extractFromDom();
 
-    return () => {
-      observer.disconnect();
-    };
-  }, [product?.id]);
+    return () => observer.disconnect();
+  }, [product?.id, isNotFound]);
 
   useEffect(() => {
-    if (!product?.id) return;
-    if (!reviewSummary) return;
-
+    if (!product?.id || !reviewSummary || isNotFound || product.id === 0) return;
     if (lastSyncedCountRef.current === reviewSummary.count) return;
 
     const syncRating = async () => {
       try {
-        const res = await fetch(
+        await fetch(
           `${API_BASE_URL}/products/${product.id}/rating`,
           {
             method: 'PUT',
@@ -388,30 +304,15 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             }),
           },
         );
-
-        if (!res.ok) {
-          console.error('Erro ao sincronizar rating:', res.status);
-          return;
-        }
-
-        console.log('Rating sincronizado com a API (Nova alteração detetada)', {
-          productId: product.id,
-          ...reviewSummary,
-        });
-        
         lastSyncedCountRef.current = reviewSummary.count;
-
       } catch (err) {
         console.error('Falha ao sincronizar rating com a API', err);
       }
     };
 
-    const timer = setTimeout(() => {
-      syncRating();
-    }, 1000);
-
+    const timer = setTimeout(syncRating, 1000);
     return () => clearTimeout(timer);
-  }, [product?.id, reviewSummary]);
+  }, [product?.id, reviewSummary, isNotFound]);
 
   if (loading) {
     return (
@@ -425,22 +326,15 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
           gap: 3,
         }}
       >
-        <CircularProgress
-          size={60}
-          thickness={4}
-          sx={{ color: '#344E41' }}
-        />
-        <Typography
-          variant="h6"
-          sx={{ color: '#344E41', fontWeight: 500 }}
-        >
-          A carregar ({source === 'jumpseller' ? 'API' : 'BD'})...
+        <CircularProgress size={60} thickness={4} sx={{ color: '#344E41' }} />
+        <Typography variant="h6" sx={{ color: '#344E41', fontWeight: 500 }}>
+          A carregar produto...
         </Typography>
       </Box>
     );
   }
 
-  if (error || !product) {
+  if (error && !product) {
     return (
       <Box
         sx={{
@@ -453,29 +347,43 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
         }}
       >
         <Typography variant="h5" color="error" sx={{ fontWeight: 'bold' }}>
-          Erro ({source})
+          Erro ao carregar
         </Typography>
         <Typography variant="body1" color="error">
           {error}
         </Typography>
-        <Button variant="outlined" onClick={toggleSource} sx={{ mt: 2 }}>
-          Tentar mudar para{' '}
-          {source === 'jumpseller' ? 'Base de Dados' : 'Jumpseller API'}
+        <Button variant="outlined" onClick={() => window.location.reload()} sx={{ mt: 2 }}>
+          Tentar Novamente
         </Button>
       </Box>
     );
   }
 
+  if (!product) return null;
+
   const photos = product.photos || [];
   const effectiveAvgScore = reviewSummary?.average ?? 0;
   const effectiveReviewCount = reviewSummary?.count ?? 0;
-
   const ratingLabel =
     effectiveReviewCount > 0
       ? `${effectiveAvgScore.toFixed(1)} (${effectiveReviewCount} review${
           effectiveReviewCount > 1 ? 's' : ''
         })`
       : null;
+
+  const isMock = isNotFound || product.id === 0;
+
+  const mainImageSrc = isMock
+    ? NOT_FOUND_IMAGE
+    : photos[selectedPhotoIndex]?.photo_url ||
+      product.mainPhoto?.photo_url ||
+      '/placeholder.png';
+
+  const mainImageAlt = isMock
+    ? 'Product not found'
+    : photos[selectedPhotoIndex]?.alt_text || product.title;
+
+  const displayPrice = isMock ? '0.00' : Number(product.price).toFixed(2);
 
   return (
     <Box sx={{ py: { xs: 2, sm: 3 } }}>
@@ -541,25 +449,22 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                 >
                   <Box
                     component="img"
-                    src={
-                      photos[selectedPhotoIndex]?.photo_url ||
-                      product.mainPhoto?.photo_url ||
-                      '/placeholder.png'
-                    }
-                    alt={
-                      photos[selectedPhotoIndex]?.alt_text || product.title
-                    }
+                    src={mainImageSrc}
+                    alt={mainImageAlt}
                     sx={{
                       width: '100%',
                       height: '100%',
                       objectFit: 'contain',
                     }}
                     onError={(e: any) => {
-                      e.currentTarget.src = '/placeholder.png';
+                      e.currentTarget.src = isMock
+                        ? NOT_FOUND_IMAGE
+                        : '/placeholder.png';
                     }}
                   />
                 </Box>
-                {photos.length > 1 && (
+
+                {!isMock && photos.length > 1 && (
                   <Box
                     sx={{
                       display: 'flex',
@@ -654,14 +559,15 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                             lg: '2.5rem',
                           },
                           fontWeight: 'bold',
-                          color: '#344E41',
+                          color: isMock ? '#8B0000' : '#344E41',
                           lineHeight: 1.1,
                           wordBreak: 'break-word',
                         }}
                       >
-                        {product.title}
+                        {isMock ? 'Produto não encontrado' : product.title}
                       </Typography>
-                      {product.brand && (
+
+                      {product.brand && !isMock && (
                         <Typography
                           variant="subtitle1"
                           sx={{
@@ -675,39 +581,34 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                           {product.brand}
                         </Typography>
                       )}
-                    </Box>
-                    <IconButton
-                      aria-label={isInWishlist ? "Remover da wishlist" : "Adicionar à wishlist"}
-                      onClick={handleWishlistToggle}
-                      disabled={isWishlistLoading}
-                      sx={{
-                        p: 1,
-                        transition: 'all 0.2s',
-                        '&:hover': {
-                          transform: 'scale(1.08)',
-                        },
-                        '&:disabled': {
-                          opacity: 0.6,
-                        },
-                        flexShrink: 0,
-                      }}
-                    >
-                      {isWishlistLoading ? (
-                        <CircularProgress size={32} sx={{ color: '#344E41' }} />
-                      ) : isInWishlist ? (
-                        <svg
-                          width="40"
-                          height="40"
-                          fill="#FE7F8B"
-                          viewBox="0 0 20 20"
+
+                      {isMock && (
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            color: '#6B7280',
+                            mt: 0.6,
+                            fontSize: { xs: '1.02rem', sm: '1.08rem' },
+                          }}
                         >
-                          <path
-                            fillRule="evenodd"
-                            d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      ) : (
+                          Verifique se o link está correto ou explore outros
+                          produtos em madeinportugal.store.
+                        </Typography>
+                      )}
+                    </Box>
+
+                    {!isMock && (
+                      <IconButton
+                        aria-label="Adicionar à wishlist"
+                        sx={{
+                          p: 1,
+                          '&:hover': {
+                            transform: 'scale(1.05)',
+                            '& svg': { fill: '#344E41' },
+                          },
+                          flexShrink: 0,
+                        }}
+                      >
                         <svg
                           width="40"
                           height="40"
@@ -722,8 +623,8 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                             d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
                           />
                         </svg>
-                      )}
-                    </IconButton>
+                      </IconButton>
+                    )}
                   </Box>
 
                   <Box
@@ -732,6 +633,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       overflowY: 'auto',
                       mb: 1.5,
                       pr: 1,
+                      mt: 2
                     }}
                   >
                     <Typography
@@ -765,12 +667,12 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                           lg: '2.5rem',
                         },
                         fontWeight: 'bold',
-                        color: 'black',
+                        color: isMock ? '#6B7280' : 'black',
                         whiteSpace: 'nowrap',
                         flexShrink: 0,
                       }}
                     >
-                      {Number(product.price).toFixed(2)} €
+                      {displayPrice} €
                     </Typography>
 
                     <Box
@@ -781,7 +683,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                         flexWrap: 'wrap',
                       }}
                     >
-                      {effectiveReviewCount > 0 ? (
+                      {!isMock && effectiveReviewCount > 0 ? (
                         <Box
                           sx={{
                             display: 'inline-flex',
@@ -820,92 +722,107 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                           sx={{
                             fontSize: { xs: '1rem', sm: '1.1rem' },
                             fontWeight: 500,
-                            color: '#999',
+                            color: isMock ? '#9CA3AF' : '#999',
                           }}
                         >
-                          Sem avaliações
+                          {isMock
+                            ? ''
+                            : 'Sem avaliações'}
                         </Typography>
                       )}
                     </Box>
                   </Box>
-                </Box>
 
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: { xs: 'column', sm: 'row' },
-                    gap: 2,
-                    width: '100%',
-                    alignItems: 'center',
-                    justifyContent: { xs: 'center', sm: 'flex-start' },
-                  }}
-                >
-                  <Button
-                    variant="contained"
+                  <Box
                     sx={{
-                      width: { xs: '100%', sm: 'auto' },
-                      minWidth: 160,
-                      bgcolor: '#344E41',
-                      color: 'white',
-                      p: { xs: '10px 20px', sm: '14px 28px' },
-                      borderRadius: '12px',
-                      fontWeight: 'bold',
-                      fontSize: { xs: '0.98rem', sm: '1.05rem' },
-                      '&:hover': { bgcolor: '#A3B18A', color: 'black' },
-                      gap: 1.5,
-                      boxShadow:
-                        '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+                      display: 'flex',
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      gap: 2,
+                      width: '100%',
+                      alignItems: 'center',
+                      justifyContent: { xs: 'center', sm: 'flex-start' },
+                      mt: 2,
                     }}
                   >
-                    <svg
-                      width="24"
-                      height="24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      viewBox="0 0 24 24"
+                    <Button
+                      variant="contained"
+                      disabled={isMock}
+                      sx={{
+                        width: { xs: '100%', sm: 'auto' },
+                        minWidth: 160,
+                        bgcolor: '#344E41',
+                        color: 'white',
+                        p: { xs: '10px 20px', sm: '14px 28px' },
+                        borderRadius: '12px',
+                        fontWeight: 'bold',
+                        fontSize: { xs: '0.98rem', sm: '1.05rem' },
+                        '&:hover': {
+                          bgcolor: isMock ? '#344E41' : '#A3B18A',
+                          color: isMock ? 'white' : 'black',
+                        },
+                        opacity: isMock ? 0.5 : 1,
+                        cursor: isMock ? 'not-allowed' : 'pointer',
+                        gap: 1.5,
+                        boxShadow:
+                          '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+                      }}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
-                      />
-                    </svg>{' '}
-                    Comprar
-                  </Button>
-                  <Button
-                    variant="contained"
-                    sx={{
-                      width: { xs: '100%', sm: 'auto' },
-                      bgcolor: '#588157',
-                      color: 'white',
-                      ml: { sm: 2 },
-                      p: { xs: '10px 20px', sm: '14px 28px' },
-                      borderRadius: '12px',
-                      fontWeight: 'bold',
-                      fontSize: { xs: '0.98rem', sm: '1.05rem' },
-                      '&:hover': { bgcolor: '#A3B18A', color: 'black' },
-                      gap: 1.5,
-                      boxShadow:
-                        '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
-                    }}
-                  >
-                    <svg
-                      width="24"
-                      height="24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      viewBox="0 0 24 24"
+                      <svg
+                        width="24"
+                        height="24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                        />
+                      </svg>{' '}
+                      Comprar
+                    </Button>
+                    <Button
+                      variant="contained"
+                      disabled={isMock}
+                      sx={{
+                        width: { xs: '100%', sm: 'auto' },
+                        bgcolor: '#588157',
+                        color: 'white',
+                        ml: { sm: 2 },
+                        p: { xs: '10px 20px', sm: '14px 28px' },
+                        borderRadius: '12px',
+                        fontWeight: 'bold',
+                        fontSize: { xs: '0.98rem', sm: '1.05rem' },
+                        '&:hover': {
+                          bgcolor: isMock ? '#588157' : '#A3B18A',
+                          color: isMock ? 'white' : 'black',
+                        },
+                        opacity: isMock ? 0.5 : 1,
+                        cursor: isMock ? 'not-allowed' : 'pointer',
+                        gap: 1.5,
+                        boxShadow:
+                          '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+                      }}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                      />
-                    </svg>{' '}
-                    Falar com o Vendedor
-                  </Button>
+                      <svg
+                        width="24"
+                        height="24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        />
+                      </svg>{' '}
+                      Falar com o Vendedor
+                    </Button>
+                  </Box>
                 </Box>
               </Box>
             </Grid>
@@ -928,7 +845,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                 fontSize: { xs: '1.2rem', sm: '1.35rem' },
               }}
             >
-              História do Produto
+              {isMock ? 'Produto não encontrado' : 'História do Produto'}
             </Typography>
             <Typography
               variant="body1"
@@ -940,7 +857,9 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                 lineHeight: 1.7,
               }}
             >
-              {product.description}
+              {isMock
+                ? 'Não conseguimos encontrar este produto. Ele pode ter sido removido ou nunca ter existido. Experimente navegar pelas categorias ou utilizar a barra de pesquisa para encontrar algo semelhante.'
+                : product.description}
             </Typography>
           </Box>
         </Box>
@@ -950,7 +869,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
         />
       </Box>
 
-      {product.specifications && product.specifications.length > 0 && (
+      {!isMock && product.specifications && product.specifications.length > 0 && (
         <ProductSpecifications data={product.specifications} />
       )}
 
@@ -974,11 +893,41 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             bgcolor: '#E4E1D6',
             borderRadius: '16px',
             p: { xs: 2.5, sm: 3, md: 3.5 },
+            position: 'relative',
           }}
         >
-          <SafeComponent>
-            <ProductReviews productId={product.id} customerId={18005446} />
-          </SafeComponent>
+          {isMock ? (
+            <Box
+              sx={{
+                textAlign: 'center',
+                py: 4,
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 'bold',
+                  color: '#4B5563',
+                  mb: 1,
+                }}
+              >
+                Reviews indisponíveis para este produto
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: '#6B7280',
+                  fontSize: { xs: '0.98rem', sm: '1.02rem' },
+                }}
+              >
+                Não é possível avaliar ou comentar um produto que não existe.
+              </Typography>
+            </Box>
+          ) : (
+            <SafeComponent>
+              <ProductReviews productId={product.id} customerId={18005446} />
+            </SafeComponent>
+          )}
         </Box>
       </Box>
 

@@ -1,12 +1,10 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProductDetail from '../components/ProductDetail';
 
-// 1. Mock do Módulo Remoto
 jest.mock('mips_reviews/ProductReviews', () => () => <div>Reviews Mock</div>, { virtual: true });
 
-// 2. Mock do matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: any) => ({
@@ -36,57 +34,45 @@ describe('ProductDetail Unit Logic', () => {
     jest.restoreAllMocks();
   });
 
-  // ADICIONADO: 3º argumento '15000' para aumentar o timeout deste teste específico
-  test('Alterna para Base de Dados quando API falha (Lógica do botão)', async () => {
+  test('Faz fallback automático para Base de Dados quando API falha', async () => {
     const mockFetch = jest.fn((url: any) => {
       const urlStr = url.toString();
-      // Sempre tratar reviews para não crashar
+      
       if (urlStr.includes('/reviews')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
-      
-      // 1. Simular Falha da API (404)
-      return Promise.resolve({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found'
-      });
+    
+      if (urlStr.includes('/products/123') && !urlStr.includes('/products/jumpseller/123')) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found'
+        });
+      }
+
+      if (urlStr.includes('/products/jumpseller/123')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 123,
+            title: 'Produto vindo da BD',
+            description: 'Descricao BD',
+            price: 50,
+            photos: [],
+            specifications: []
+          })
+        });
+      }
+
+      return Promise.reject('URL desconhecido');
     });
     
     (global as any).fetch = mockFetch;
 
-    render(<ProductDetail />);
+    render(<ProductDetail productId="123" />);
 
-    // Esperar pelo ecrã de erro (pode demorar devido aos retries do componente)
-    // Aumentamos também o timeout do 'findByText' para garantir que ele espera o suficiente
-    const errorTitle = await screen.findByText(/Erro/i, {}, { timeout: 10000 });
-    expect(errorTitle).toBeInTheDocument();
+    await screen.findByText('Produto vindo da BD', {}, { timeout: 4000 });
 
-    // 2. Preparar mock para a chamada da Base de Dados (Sucesso)
-    mockFetch.mockImplementation((url: any) => {
-      const urlStr = url.toString();
-      if (urlStr.includes('/reviews')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-      
-      // Resposta de Sucesso da BD
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
-          id: 999,
-          title: 'Produto vindo da BD',
-          description: 'Descricao BD',
-          price: 50,
-          photos: [],
-          specifications: []
-        })
-      });
-    });
-
-    // 3. Encontrar e clicar no botão
-    const toggleButton = screen.getByRole('button', { name: /Tentar mudar para Base de Dados/i });
-    fireEvent.click(toggleButton);
-
-    // 4. Verificar se o novo produto carregou
-    await screen.findByText('Produto vindo da BD');
-
-  }, 15000); // <--- AQUI ESTÁ A CORREÇÃO: Aumenta o tempo limite do teste para 15s
+    expect(screen.getByText('50.00 €')).toBeInTheDocument();
+  });
 });
