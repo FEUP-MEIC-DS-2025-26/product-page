@@ -57,7 +57,7 @@ const App = ({ initialProductId }: AppProps) => {
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <Navbar />
       <Box component="main" sx={{ flexGrow: 1, bgcolor: "#DAD7CD" }}>
-        <ProductDetail productId={productId} />
+        <ProductDetail productId={productId} buyerId={1}/>
         <ProductSpecifications data={productSpecs} />
       </Box>
       <Footer />

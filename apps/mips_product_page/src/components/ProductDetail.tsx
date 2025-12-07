@@ -10,7 +10,6 @@ import { useTheme } from '@mui/material/styles';
 import SafeComponent from './SafeComponent';
 import { JumpsellerReview } from '../services/jumpsellerApi';
 
-// export const API_BASE_URL = 'http://localhost:3002/api';
 export const API_BASE_URL = 'https://api.madeinportugal.store/api';
 
 const ProductReviews = React.lazy(
@@ -29,6 +28,7 @@ type ProductPhoto = {
 
 type ProductFromApi = {
   id: number;
+  external_id: number;
   title: string;
   storytelling: string | null;
   description: string | null;
@@ -63,6 +63,7 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
 
   return {
     id: product.id,
+    external_id: product.external_id || product.id,
     title: product.name || 'Produto sem nome',
     storytelling: stripHtmlTags(
       product.description || 'Descrição não disponível.',
@@ -139,31 +140,102 @@ const renderStars = (score: number) =>
 
 interface ProductDetailProps {
   productId?: string | number;
+  buyerId?: number; 
 }
 
-export default function ProductDetail({ productId }: ProductDetailProps) {
+export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailProps) {
   const [product, setProduct] = useState<ProductFromApi | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(
-    null,
-  );
+  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null);
+  const [source, setSource] = useState<'jumpseller' | 'database'>('jumpseller');
 
-  const [source, setSource] = useState<'jumpseller' | 'database'>(
-    'jumpseller',
-  );
+  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [isWishlistLoading, setIsWishlistLoading] = useState(false);
 
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
   const targetId = productId || 32863784;
-
   const lastSyncedCountRef = useRef(0);
 
   const toggleSource = () => {
     setSource((prev) => (prev === 'jumpseller' ? 'database' : 'jumpseller'));
+  };
+
+  useEffect(() => {
+    if (!product?.id || !buyerId) return;
+
+    const checkWishlist = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/wishlist/check?buyerId=${buyerId}&externalId=${product.external_id}`,
+          {
+            method: 'GET',
+            mode: 'cors',
+            credentials: 'omit',
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setIsInWishlist(data.inWishlist);
+        }
+      } catch (error) {
+        console.error('Error checking wishlist:', error);
+      }
+    };
+
+    checkWishlist();
+  }, [product?.id, buyerId]);
+
+  // Toggle wishlist
+  const handleWishlistToggle = async () => {
+    if (!product?.id || !buyerId || isWishlistLoading) return;
+
+    setIsWishlistLoading(true);
+
+    try {
+      if (isInWishlist) {
+        // Remover da wishlist
+        const response = await fetch(
+          `${API_BASE_URL}/wishlist/remove?buyerId=${buyerId}&externalId=${product.external_id}`,
+          {
+            method: 'POST',
+            mode: 'cors',
+            credentials: 'omit',
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to remove from wishlist');
+        }
+
+        setIsInWishlist(false);
+      } else {
+        const response = await fetch(
+          `${API_BASE_URL}/wishlist/add?buyerId=${buyerId}&externalId=${product.external_id}`,
+          {
+            method: 'POST',
+            mode: 'cors',
+            credentials: 'omit',
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to add to wishlist');
+        }
+
+        setIsInWishlist(true);
+      }
+    } catch (error) {
+      console.error('Error toggling wishlist:', error);
+      alert('Falha ao atualizar a wishlist. Por favor, tente novamente.');
+    } finally {
+      setIsWishlistLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -368,7 +440,6 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
     );
   }
 
-  // Error State
   if (error || !product) {
     return (
       <Box
@@ -606,30 +677,52 @@ export default function ProductDetail({ productId }: ProductDetailProps) {
                       )}
                     </Box>
                     <IconButton
-                      aria-label="Adicionar à wishlist"
+                      aria-label={isInWishlist ? "Remover da wishlist" : "Adicionar à wishlist"}
+                      onClick={handleWishlistToggle}
+                      disabled={isWishlistLoading}
                       sx={{
                         p: 1,
+                        transition: 'all 0.2s',
                         '&:hover': {
-                          transform: 'scale(1.05)',
-                          '& svg': { fill: '#344E41' },
+                          transform: 'scale(1.08)',
+                        },
+                        '&:disabled': {
+                          opacity: 0.6,
                         },
                         flexShrink: 0,
                       }}
                     >
-                      <svg
-                        width="40"
-                        height="40"
-                        fill="none"
-                        stroke="#344E41"
-                        strokeWidth={2.2}
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                        />
-                      </svg>
+                      {isWishlistLoading ? (
+                        <CircularProgress size={32} sx={{ color: '#344E41' }} />
+                      ) : isInWishlist ? (
+                        <svg
+                          width="40"
+                          height="40"
+                          fill="#FE7F8B"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          width="40"
+                          height="40"
+                          fill="none"
+                          stroke="#344E41"
+                          strokeWidth={2.2}
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                          />
+                        </svg>
+                      )}
                     </IconButton>
                   </Box>
 
