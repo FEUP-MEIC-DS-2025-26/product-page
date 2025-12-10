@@ -15,6 +15,11 @@ const ProductReviews = React.lazy(
   () => import('mips_reviews/ProductReviews'),
 );
 
+const BundleSuggestions = React.lazy(
+  () => import("mips_bundle_suggestions/BundleSuggestions")
+);
+
+// --- TYPES ---
 type ProductSpecification = {
   title: string;
   description: string;
@@ -1024,11 +1029,20 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             </SafeComponent>
           )}
         </Box>
+        <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
       </Box>
 
-      <Box
-        sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }}
-      />
+      {/* Bundles suggestions */}
+      <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 }, display: 'flex', flexDirection: 'column', gap: 1.5, pb: 4 }}>
+        <Box sx={{ bgcolor: '#E4E1D6', borderRadius: '16px', p: { xs: 2.5, sm: 3, md: 3.5 } }}>
+          <SafeComponent>
+            <BundleSuggestions productId={product.id} />
+          </SafeComponent>
+        </Box>
+      </Box>
+      
+      <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
+
     </Box>
   );
 }
