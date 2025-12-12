@@ -1089,7 +1089,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             userId={buyerId}
             visible={showReportModal}
             onClose={() => setShowReportModal(false)}
-            mode="light"
+            mode={theme.palette.mode === 'dark' ? 'dark' : 'light'}
           />
         </SafeComponent>
       )}
