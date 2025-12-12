@@ -19,6 +19,10 @@ const BundleSuggestions = React.lazy(
   () => import("mips_bundle_suggestions/BundleSuggestions")
 );
 
+const ReportModal = React.lazy(
+  () => import("mips_product_report/ReportModal")
+);
+
 // --- TYPES ---
 type ProductSpecification = {
   title: string;
@@ -172,6 +176,9 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
 
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
+
+  // Estado para o Report Modal
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
@@ -677,54 +684,85 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       )}
                     </Box>
 
-                    <IconButton
-                      aria-label={isInWishlist ? "Remover da wishlist" : "Adicionar à wishlist"}
-                      onClick={handleWishlistToggle}
-                      disabled={isWishlistLoading}
-                      sx={{
-                        p: 1,
-                        transition: 'all 0.2s',
-                        '&:hover': {
-                          transform: 'scale(1.08)',
-                        },
-                        '&:disabled': {
-                          opacity: 0.6,
-                        },
-                        flexShrink: 0,
-                      }}
-                    >
-                      {isWishlistLoading ? (
-                        <CircularProgress size={32} sx={{ color: '#344E41' }} />
-                      ) : isInWishlist ? (
-                        <svg
-                          width="40"
-                          height="40"
-                          fill="#FE7F8B"
-                          viewBox="0 0 20 20"
+                    <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+                      <IconButton
+                        aria-label={isInWishlist ? "Remover da wishlist" : "Adicionar à wishlist"}
+                        onClick={handleWishlistToggle}
+                        disabled={isWishlistLoading}
+                        sx={{
+                          p: 1,
+                          transition: 'all 0.2s',
+                          '&:hover': {
+                            transform: 'scale(1.08)',
+                          },
+                          '&:disabled': {
+                            opacity: 0.6,
+                          },
+                        }}
+                      >
+                        {isWishlistLoading ? (
+                          <CircularProgress size={32} sx={{ color: '#344E41' }} />
+                        ) : isInWishlist ? (
+                          <svg
+                            width="40"
+                            height="40"
+                            fill="#FE7F8B"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            width="40"
+                            height="40"
+                            fill="none"
+                            stroke="#344E41"
+                            strokeWidth={2.2}
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                            />
+                          </svg>
+                        )}
+                      </IconButton>
+
+                      {!isMock && (
+                        <IconButton
+                          aria-label="Reportar produto"
+                          onClick={() => setShowReportModal(true)}
+                          sx={{
+                            p: 1,
+                            transition: 'all 0.2s',
+                            '&:hover': {
+                              transform: 'scale(1.08)',
+                              bgcolor: 'rgba(239, 68, 68, 0.1)',
+                            },
+                          }}
                         >
-                          <path
-                            fillRule="evenodd"
-                            d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          width="40"
-                          height="40"
-                          fill="none"
-                          stroke="#344E41"
-                          strokeWidth={2.2}
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                          />
-                        </svg>
+                          <svg
+                            width="40"
+                            height="40"
+                            fill="none"
+                            stroke="#EF4444"
+                            strokeWidth={2}
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5"
+                            />
+                          </svg>
+                        </IconButton>
                       )}
-                    </IconButton>
+                    </Box>
                   </Box>
 
                   <Box
@@ -1042,6 +1080,19 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
       </Box>
       
       <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
+
+      {!isMock && (
+        <SafeComponent>
+          <ReportModal
+            externalId={String(product.id)}
+            productTitle={product.title}
+            userId={buyerId}
+            visible={showReportModal}
+            onClose={() => setShowReportModal(false)}
+            mode="light"
+          />
+        </SafeComponent>
+      )}
 
     </Box>
   );
