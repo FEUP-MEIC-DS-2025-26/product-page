@@ -13,6 +13,7 @@ export default createModuleFederationConfig({
   remotes: {
      mips_reviews: "mips_reviews@https://reviews-frontend-bk4zrk5bua-ew.a.run.app/mf-manifest.json",
      mips_bundle_suggestions: "mips_bundle_suggestions@https://bundle-microfrontend-pf6fio53fa-ew.a.run.app/mf-manifest.json",
+     mips_product_report: "mips_product_report@https://product-report-front-1028448199115.europe-west1.run.app/mf-manifest.json",
   },
   shareStrategy: "loaded-first",
   shared: {
