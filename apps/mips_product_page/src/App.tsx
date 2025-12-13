@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
+import { useTheme } from "@mui/material/styles";
 import "./App.css";
-import Navbar from "./components/Navbar";
-import Footer from "./components/Footer";
 import ProductDetail from "./components/ProductDetail";
 import { ProductSpecifications } from "./components/ProductDetail";
 import { initJumpsellerApi, getJumpsellerApi } from "./services/jumpsellerApi";
@@ -12,7 +11,6 @@ import initTelemetry from './telemetry';
 if (process.env.NODE_ENV !== 'test') {
     initTelemetry();
 }
-
 
 const API_BASE_URL = "https://api.madeinportugal.store/api";
 
@@ -24,6 +22,10 @@ const App = ({ initialProductId }: AppProps) => {
   const [productSpecs, setProductSpecs] = useState<
     Array<{ title: string; description: string }>
   >([]);
+
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  const appBgColor = isDark ? '#000000' : '#FFFFFF';
 
   useEffect(() => {
     try {
@@ -55,12 +57,10 @@ const App = ({ initialProductId }: AppProps) => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <Navbar />
-      <Box component="main" sx={{ flexGrow: 1, bgcolor: "#DAD7CD" }}>
+      <Box component="main" sx={{ flexGrow: 1, bgcolor: appBgColor, transition: 'background-color 0.3s ease' }}>
         <ProductDetail productId={productId} buyerId={1}/>
         <ProductSpecifications data={productSpecs} />
       </Box>
-      <Footer />
     </Box>
   );
 };
