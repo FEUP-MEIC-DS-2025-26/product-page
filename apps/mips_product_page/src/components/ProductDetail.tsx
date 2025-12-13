@@ -185,6 +185,14 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   const targetId = productId ?? null;
   const lastSyncedCountRef = useRef(0);
 
+  interface Certificate {
+    id: string;
+    bucketPath: string;
+  }
+
+  const [certificates, setCertificates] = useState<Certificate[]>();
+  const [showCertificates, setShowCertificates] = useState(false);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -960,11 +968,106 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       </svg>{' '}
                       Falar com o Vendedor
                     </Button>
+                    <Button
+                      variant="contained"
+                      disabled={isMock}
+                      sx={{
+                        width: { xs: '100%', sm: 'auto' },
+                        bgcolor: '#588157',
+                        color: 'white',
+                        ml: { sm: 2 },
+                        p: { xs: '10px 20px', sm: '14px 28px' },
+                        borderRadius: '12px',
+                        fontWeight: 'bold',
+                        fontSize: { xs: '0.98rem', sm: '1.05rem' },
+                        '&:hover': {
+                          bgcolor: isMock ? '#588157' : '#A3B18A',
+                          color: isMock ? 'white' : 'black',
+                        },
+                        opacity: isMock ? 0.5 : 1,
+                        cursor: isMock ? 'not-allowed' : 'pointer',
+                        gap: 1.5,
+                        boxShadow:
+                          '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+                      }}
+                      onClick={async () => {
+                          if (!certificates) {
+                            const fetchedCertificates = await fetch(`https://certificate-validation-pubsub-180908610681.europe-southwest1.run.app/certificates/${productId}/`,
+                            //const certificates = await fetch(`http://localhost:8081/certificates/banana`,
+                              {
+                                method: 'GET',
+                              }
+                            )
+                            .then((response) => {
+                              console.log(response)
+                              return response.json()
+                            })
+                            .then((respnseJson) => respnseJson.certificates);
+
+                            console.log(fetchedCertificates);
+
+                            /*
+                            if (certificates.length == 0) return <div>This product has no certificates</div>
+
+                            let certificatesButtons = [];
+                            for (const certificate of certificates) {
+                              certificatesButtons.push(
+                                <div key={certificate.id}>
+                                  <a
+                                    href={certificate.bucketPath}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    {certificate.id}
+                                  </a>
+                                </div>
+                              )
+                            }
+                            */
+
+                            setCertificates(fetchedCertificates);
+                          }
+
+                          setShowCertificates(!showCertificates);
+                        }
+                      }
+                    >
+                      <svg
+                        width="24"
+                        height="24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                      </svg>{' '}
+                      Certificados
+                    </Button>
                   </Box>
                 </Box>
               </Box>
             </Grid>
           </Grid>
+
+          {showCertificates && (
+            <div style={{display: 'flex', justifyContent: 'right'}}>
+              {certificates && certificates.length > 0 ? (
+                certificates.map((certificate) => (
+                  <div key={certificate.id}>
+                    <a
+                      href={certificate.bucketPath}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {certificate.id}
+                    </a>
+                  </div>
+                ))
+              ) : (
+                <p>No certificates available</p>
+              )}
+            </div>
+          )}
 
           <Box
             sx={{
