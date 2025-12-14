@@ -7,6 +7,7 @@ import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme, alpha } from '@mui/material/styles';
+import SettingsIcon from '@mui/icons-material/Settings';
 import SafeComponent from './SafeComponent';
 
 export const API_BASE_URL = 'https://api.madeinportugal.store/api';
@@ -789,6 +790,19 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                           </svg>
                         </IconButton>
                       )}
+
+                      {!isMock && (
+                        <IconButton
+                          aria-label="Customizar produto"
+                          onClick={() => setShowCustomizationModal('vendor')}
+                          sx={{
+                            p: 0.5,
+                            '& svg': { width: { xs: 28, md: 40 }, height: { xs: 28, md: 40 } },
+                          }}
+                        >
+                         <SettingsIcon/>
+                        </IconButton>
+                      )}
                     </Box>
                   </Box>
 
@@ -933,32 +947,6 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
                       Comprar
-                    </Button>
-                    <Button
-                      variant="contained"
-                      disabled={isMock}
-                      onClick={() => setShowCustomizationModal('vendor')}
-                      sx={{
-                        width: { xs: '100%', md: 'auto' }, // 100% largura em mobile
-                        minWidth: { xs: 'auto', md: 160 },
-                        bgcolor: BRAND_GREEN,
-                        color: 'white',
-                        p: { xs: '8px 16px', sm: '12px 24px' }, // Padding menor
-                        borderRadius: '10px',
-                        fontWeight: 'bold',
-                        fontSize: { xs: '0.85rem', sm: '1rem' }, // Letra menor
-                        '&:hover': {
-                          bgcolor: isMock ? BRAND_GREEN : alpha(BRAND_GREEN, 0.8),
-                          color: isMock ? 'white' : 'white',
-                        },
-                        opacity: isMock ? 0.5 : 1,
-                        cursor: isMock ? 'not-allowed' : 'pointer',
-                        gap: 1,
-                        boxShadow:
-                          '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
-                      }}
-                    >
-                      Customização do Vendedor
                     </Button>
                     <Button
                       variant="contained"
