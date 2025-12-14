@@ -8,6 +8,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import SafeComponent from './SafeComponent';
+import { flexDirection } from '@mui/system';
 
 export const API_BASE_URL = 'https://api.madeinportugal.store/api';
 
@@ -999,7 +1000,8 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                               }
                             )
                             .then((response) => response.json())
-                            .then((respnseJson) => respnseJson.certificates);
+                            .then((respnseJson) => respnseJson.certificates)
+                            .catch(() => []);
 
                             fetchedCertificates.map((certificate: Certificate) => {
                               const filename = certificate.bucketPath.split('/').at(-1);
@@ -1031,23 +1033,47 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
           </Grid>
 
           {showCertificates && (
-            <div style={{display: 'flex', justifyContent: 'right'}}>
+            <Box
+              style={{display: 'flex', alignItems: 'flex-end', flexDirection: 'column'}}
+              sx={{
+                bgcolor: '#F5F5F5',
+                borderRadius: '16px',
+                mt: 4,
+                p: { xs: 2, sm: 3 },
+              }}
+            >
               {certificates && certificates.length > 0 ? (
                 certificates.map((certificate) => (
-                  <div key={certificate.id}>
-                    <a
-                      href={certificate.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {certificate.id}
-                    </a>
-                  </div>
+                  <Typography
+                    key={certificate.id}
+                    component='a'
+                    href={certificate.url}
+                    variant="body1"
+                    sx={{
+                      fontSize: { xs: '1.02rem', sm: '1.1rem' },
+                      fontWeight: 600,
+                      whiteSpace: 'pre-line',
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {certificate.id}
+                  </Typography>
                 ))
               ) : (
-                <p>No certificates available</p>
+                <Typography
+                  variant="body1"
+                  sx={{
+                    fontSize: { xs: '1.02rem', sm: '1.1rem' },
+                    fontWeight: 600,
+                    color: 'black',
+                    whiteSpace: 'pre-line',
+                    lineHeight: 1.7,
+                  }}
+                >
+                  Este produto não tem certificados
+                </Typography>
               )}
-            </div>
+            </Box>
           )}
 
           <Box
