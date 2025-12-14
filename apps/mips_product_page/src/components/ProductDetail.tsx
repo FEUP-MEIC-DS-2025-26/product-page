@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
@@ -6,11 +6,18 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import SafeComponent from './SafeComponent';
 import { flexDirection } from '@mui/system';
 
 export const API_BASE_URL = 'https://api.madeinportugal.store/api';
+
+const IN_PRODUCTION = !(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+// --- COR DA MARCA (Verde) ---
+const BRAND_GREEN = '#417F45'; 
+// --- COR DAS ESTRELAS (Amarelo) ---
+const STAR_COLOR = '#FFC107';
 
 const ProductReviews = React.lazy(
   () => import('mips_reviews/ProductReviews'),
@@ -71,17 +78,21 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
   const product = jumpsellerProduct.product || jumpsellerProduct;
 
   const customFieldsSpecs = product.fields
-    ? product.fields.map((field: any) => ({
-        title: field.label,
-        description: stripHtmlTags(field.value),
-      }))
+    ? product.fields
+        .filter((field: any) => 
+          field.label !== "História" && field.label !== "Historia"
+        )
+        .map((field: any) => ({
+          title: field.label,
+          description: stripHtmlTags(field.value),
+        }))
     : [];
 
   return {
     id: product.id,
     title: product.name || 'Produto sem nome',
     storytelling: stripHtmlTags(
-      product.description || 'Descrição não disponível.',
+      product.fields?.find((field: any) => field.label === "História" || field.label === "Historia")?.value ||  'História não disponível.',
     ),
     description: stripHtmlTags(
       product.description || 'Descrição não disponível.',
@@ -125,7 +136,7 @@ const MOCK_PRODUCT: ProductFromApi = {
   brand: null,
 };
 
-const renderStars = (score: number) =>
+const renderStars = (score: number, fillColor: string, strokeColor: string) =>
   Array.from({ length: 5 }, (_, i) => {
     const id = `star-half-clip-${i}`;
     const full = i < Math.floor(score);
@@ -136,9 +147,9 @@ const renderStars = (score: number) =>
         key={i}
         viewBox="0 0 24 24"
         style={{
-          width: 32,
-          height: 32,
-          marginRight: 4,
+          width: 20, 
+          height: 20,
+          marginRight: 1,
           display: 'block',
         }}
       >
@@ -151,7 +162,7 @@ const renderStars = (score: number) =>
             </defs>
             <path
               d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-              fill="#FFC107"
+              fill={fillColor}
               stroke="none"
               style={{ clipPath: `url(#${id})` }}
             />
@@ -159,15 +170,15 @@ const renderStars = (score: number) =>
         )}
         <path
           d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-          fill={full ? '#FFC107' : 'none'}
-          stroke="black"
+          fill={full ? fillColor : 'none'}
+          stroke={strokeColor}
           strokeWidth={1.4}
         />
       </svg>
     );
   });
 
-export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailProps)  {
+export default function ProductDetail({ productId, buyerId }: ProductDetailProps)  {
   const [product, setProduct] = useState<ProductFromApi | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -178,10 +189,48 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
 
-  // Estado para o Report Modal
   const [showReportModal, setShowReportModal] = useState(false);
 
+  const [sessionUserId, setSessionUserId] = useState<number | null>(IN_PRODUCTION ? null : (buyerId ?? null));
+
+  const getUserIdFromSession = async (): Promise<number | null> => {
+    try {
+      const authenticationURL = 'https://api.madeinportugal.store/api/auth/verify';
+
+      const response = await fetch(authenticationURL, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.userID ?? null;
+    } catch (err) {
+      console.error('Error verifying session:', err);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    if (!IN_PRODUCTION) {
+      setSessionUserId(buyerId);
+      return;
+    }
+
+    const init = async () => {
+      const id = await getUserIdFromSession();
+      if (mounted) setSessionUserId(id);
+    };
+
+    init();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
   const targetId = productId ?? null;
   const lastSyncedCountRef = useRef(0);
@@ -194,6 +243,11 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
 
   const [certificates, setCertificates] = useState<Certificate[]>();
   const [showCertificates, setShowCertificates] = useState(false);
+  // --- CONFIGURAÇÃO DA PALETA ESTRITA ---
+  const bgColor = isDark ? '#000000' : '#FFFFFF';
+  const textColor = isDark ? '#FFFFFF' : '#000000';
+  const borderColor = isDark ? '#333333' : '#e0e0e0';
+  const secondaryTextColor = isDark ? '#aaaaaa' : '#555555';
 
   useEffect(() => {
     let isMounted = true;
@@ -341,18 +395,25 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   }, [product?.id, reviewSummary, isNotFound]);
 
   useEffect(() => {
-    if (!product?.id || !buyerId) return;
+    const effectiveBuyerId = IN_PRODUCTION ? sessionUserId : buyerId;
+    if (!product?.id || !effectiveBuyerId) return;
 
     const checkWishlist = async () => {
       try {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/check?buyerId=${buyerId}&productId=${product.id}`,
+          `${API_BASE_URL}/wishlist/check?buyerId=${effectiveBuyerId}&productId=${product.id}`,
           {
             method: 'GET',
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'include',
           }
         );
+
+        if (response.status === 401) {
+          setSessionUserId(null);
+          setIsInWishlist(false);
+          return;
+        }
 
         if (response.ok) {
           const data = await response.json();
@@ -364,23 +425,34 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
     };
 
     checkWishlist();
-  }, [product?.id, buyerId]);
+  }, [product?.id, sessionUserId, buyerId]);
 
   const handleWishlistToggle = async () => {
-    if (!product?.id || !buyerId || isWishlistLoading) return;
+    if (!product?.id || isWishlistLoading) return;
+
+    if (!sessionUserId) {
+      window.location.href = '/auth';
+      return;
+    }
+    const userIdForRequest = sessionUserId;
 
     setIsWishlistLoading(true);
 
     try {
       if (isInWishlist) {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/remove?buyerId=${buyerId}&productId=${product.id}`,
+          `${API_BASE_URL}/wishlist/remove?buyerId=${userIdForRequest}&productId=${product.id}`,
           {
             method: 'POST',
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'include',
           }
         );
+
+        if (response.status === 401) {
+          window.location.href = '/auth';
+          return;
+        }
 
         if (!response.ok) {
           throw new Error('Failed to remove from wishlist');
@@ -389,13 +461,18 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
         setIsInWishlist(false);
       } else {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/add?buyerId=${buyerId}&productId=${product.id}`,
+          `${API_BASE_URL}/wishlist/add?buyerId=${userIdForRequest}&productId=${product.id}`,
           {
             method: 'POST',
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'include',
           }
         );
+
+        if (response.status === 401) {
+          window.location.href = '/auth';
+          return;
+        }
 
         if (!response.ok) {
           throw new Error('Failed to add to wishlist');
@@ -423,8 +500,8 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
           gap: 3,
         }}
       >
-        <CircularProgress size={60} thickness={4} sx={{ color: '#344E41' }} />
-        <Typography variant="h6" sx={{ color: '#344E41', fontWeight: 500 }}>
+        <CircularProgress size={60} thickness={4} sx={{ color: BRAND_GREEN }} />
+        <Typography variant="h6" sx={{ color: BRAND_GREEN, fontWeight: 500 }}>
           A carregar produto...
         </Typography>
       </Box>
@@ -463,9 +540,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   const effectiveReviewCount = reviewSummary?.count ?? 0;
   const ratingLabel =
     effectiveReviewCount > 0
-      ? `${effectiveAvgScore.toFixed(1)} (${effectiveReviewCount} review${
-          effectiveReviewCount > 1 ? 's' : ''
-        })`
+      ? `${effectiveAvgScore.toFixed(1)} (${effectiveReviewCount} ${effectiveReviewCount === 1 ? 'avaliação' : 'avaliações'})`
       : null;
 
   const isMock = isNotFound || product.id === 0;
@@ -482,28 +557,58 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
 
   const displayPrice = isMock ? '0.00' : Number(product.price).toFixed(2);
 
+  // ...existing code...
+
   return (
-    <Box sx={{ py: { xs: 2, sm: 3 } }}>
+    <Box sx={{ py: { xs: 1, sm: 3 } }}> 
+      {/* INJECTED STYLES FOR REVIEWS IN DARK MODE */}
+      {isDark && (
+        <style>
+          {`
+            #mips-reviews-wrapper,
+            #mips-reviews-wrapper p,
+            #mips-reviews-wrapper span,
+            #mips-reviews-wrapper h1,
+            #mips-reviews-wrapper h2,
+            #mips-reviews-wrapper h3,
+            #mips-reviews-wrapper h4,
+            #mips-reviews-wrapper h5,
+            #mips-reviews-wrapper h6,
+            #mips-reviews-wrapper div {
+              color: #ffffff !important;
+            }
+            #mips-reviews-wrapper svg {
+              fill: #FFC107; /* Opcional: garantir que estrelas continuam amarelas */
+            }
+          `}
+        </style>
+      )}
+
       <Box
         sx={{
           maxWidth: 1200,
           mx: 'auto',
-          px: { xs: 1.5, sm: 3, md: 0 },
+          px: { xs: 1, sm: 3, md: 0 },
         }}
       >
+        {/* CARTÃO PRINCIPAL */}
         <Box
           sx={{
-            bgcolor: '#E4E1D6',
+            bgcolor: bgColor, 
+            color: textColor,
             borderRadius: '24px',
-            p: { xs: 2, sm: 3, md: 4 },
-            boxShadow:
-              '0 10px 15px -3px rgba(0,0,0,0.12), 0 4px 6px -2px rgba(0,0,0,0.06)',
+            p: { xs: 1.5, sm: 2.5, md: 4 }, // Padding interno muito reduzido em XS
+            border: `1px solid ${borderColor}`,
+            boxShadow: isDark 
+              ? '0 10px 15px -3px rgba(0,0,0,0.5)' 
+              : '0 10px 15px -3px rgba(0,0,0,0.12)',
+            transition: 'all 0.3s ease'
           }}
         >
           <Grid
             container
             columnSpacing={{ xs: 2, md: 2 }}
-            rowSpacing={isSmallScreen ? 2 : 0}
+            rowSpacing={isSmallScreen ? 1.5 : 0} // Row spacing reduzido
             sx={{
               alignItems: 'strech',
               flexWrap: { xs: 'wrap', md: 'nowrap' },
@@ -522,11 +627,12 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             >
               <Box
                 sx={{
-                  bgcolor: '#274836',
+                  bgcolor: BRAND_GREEN,
                   borderRadius: '16px',
-                  p: 2,
-                  width: { md: 450 },
-                  height: { md: 550 },
+                  p: { xs: 1.5, md: 2 },
+                  width: { xs: '100%', md: 450 },
+                  height: 'auto',
+                  minHeight: { xs: 'auto', md: 550 },
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 1,
@@ -537,7 +643,9 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                     bgcolor: 'white',
                     borderRadius: '8px',
                     width: '100%',
-                    height: '100%',
+                    height: { xs: 'auto', md: 450 },
+                    maxHeight: { xs: 300, sm: 360, md: 450 }, // MaxHeight mais agressivo em XS
+                    aspectRatio: { xs: '1/1', md: 'auto' },
                     overflow: 'hidden',
                     display: 'flex',
                     alignItems: 'center',
@@ -561,14 +669,15 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                   />
                 </Box>
 
+                {/* MINIATURAS MAIS PEQUENAS EM MOBILE */}
                 {!isMock && photos.length > 1 && (
                   <Box
                     sx={{
                       display: 'flex',
-                      gap: 2,
-                      mt: 0,
+                      gap: { xs: 1, md: 2 },
+                      mt: 1,
                       justifyContent: 'center',
-                      overflowX: 'auto',
+                      flexWrap: 'wrap',
                     }}
                   >
                     {photos.map((p, i) => (
@@ -576,15 +685,15 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                         key={i}
                         onClick={() => setSelectedPhotoIndex(i)}
                         sx={{
-                          width: { xs: 60, sm: 60 },
-                          height: { xs: 60, sm: 60 },
+                          width: { xs: 40, sm: 50, md: 60 }, // Miniaturas 40px em XS
+                          height: { xs: 40, sm: 50, md: 60 },
                           flexShrink: 0,
                           borderRadius: 2,
                           overflow: 'hidden',
                           border:
                             i === selectedPhotoIndex
-                              ? '2.5px solid #344E41'
-                              : '2.5px solid transparent',
+                              ? '2px solid white'
+                              : '2px solid transparent',
                           cursor: 'pointer',
                           bgcolor: 'white',
                           display: 'flex',
@@ -592,7 +701,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                           justifyContent: 'center',
                           boxShadow:
                             i === selectedPhotoIndex
-                              ? '0 0 0 3px white, 0 0 10px 2px rgba(255,255,255,0.6)'
+                              ? '0 0 0 2px rgba(255,255,255,0.5)'
                               : 'none',
                           transition: 'all 0.18s',
                         }}
@@ -632,7 +741,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                   flexDirection: 'column',
                   height: '100%',
                   justifyContent: 'space-between',
-                  gap: 3,
+                  gap: { xs: 1.5, md: 3 }, 
                 }}
               >
                 <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
@@ -641,23 +750,25 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'flex-start',
-                      mb: 1,
-                      gap: 2,
+                      mb: 0.5,
+                      gap: 1.5,
                     }}
                   >
                     <Box sx={{ flexGrow: 1 }}>
+                      {/* TÍTULO RESPONSIVO: MUITO PEQUENO EM XS PARA CABER "BARCELOS" */}
                       <Typography
                         variant="h3"
                         component="h1"
                         sx={{
                           fontSize: {
-                            xs: '2rem',
-                            sm: '2.25rem',
+                            xs: '1.25rem',  // REDUZIDO DRASTICAMENTE EM MOBILE
+                            sm: '1.5rem',
+                            md: '2.25rem',  // Desktop mantém-se
                             lg: '2.5rem',
                           },
                           fontWeight: 'bold',
-                          color: isMock ? '#8B0000' : '#344E41',
-                          lineHeight: 1.1,
+                          color: isMock ? '#8B0000' : BRAND_GREEN,
+                          lineHeight: 1.2,
                           wordBreak: 'break-word',
                         }}
                       >
@@ -668,9 +779,9 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                         <Typography
                           variant="subtitle1"
                           sx={{
-                            color: '#588157',
+                            color: textColor,
                             fontWeight: 600,
-                            fontSize: { xs: '1.05rem', sm: '1.15rem' },
+                            fontSize: { xs: '0.85rem', sm: '1rem', md: '1.15rem' }, 
                             mt: 0.5,
                             fontStyle: 'italic',
                           }}
@@ -678,45 +789,26 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                           {product.brand}
                         </Typography>
                       )}
-
-                      {isMock && (
-                        <Typography
-                          variant="subtitle1"
-                          sx={{
-                            color: '#6B7280',
-                            mt: 0.6,
-                            fontSize: { xs: '1.02rem', sm: '1.08rem' },
-                          }}
-                        >
-                          Verifique se o link está correto ou explore outros
-                          produtos em madeinportugal.store.
-                        </Typography>
-                      )}
                     </Box>
 
-                    <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+                    {/* ACTIONS TOP */}
+                    <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
                       <IconButton
                         aria-label={isInWishlist ? "Remover da wishlist" : "Adicionar à wishlist"}
                         onClick={handleWishlistToggle}
                         disabled={isWishlistLoading}
                         sx={{
-                          p: 1,
-                          transition: 'all 0.2s',
-                          '&:hover': {
-                            transform: 'scale(1.08)',
-                          },
-                          '&:disabled': {
-                            opacity: 0.6,
-                          },
+                          p: 0.5, 
+                          '& svg': { width: { xs: 28, md: 40 }, height: { xs: 28, md: 40 } }, 
                         }}
                       >
                         {isWishlistLoading ? (
-                          <CircularProgress size={32} sx={{ color: '#344E41' }} />
+                          <CircularProgress size={24} sx={{ color: BRAND_GREEN }} />
                         ) : isInWishlist ? (
                           <svg
                             width="40"
                             height="40"
-                            fill="#FE7F8B"
+                            fill="#EF4444" 
                             viewBox="0 0 20 20"
                           >
                             <path
@@ -730,7 +822,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                             width="40"
                             height="40"
                             fill="none"
-                            stroke="#344E41"
+                            stroke="#EF4444" // <--- CORAÇÃO VERMELHO
                             strokeWidth={2.2}
                             viewBox="0 0 24 24"
                           >
@@ -746,14 +838,16 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       {!isMock && (
                         <IconButton
                           aria-label="Reportar produto"
-                          onClick={() => setShowReportModal(true)}
+                          onClick={() => {
+                            if (!sessionUserId) {
+                              window.location.href = '/auth';
+                              return;
+                            }
+                            setShowReportModal(true);
+                          }}
                           sx={{
-                            p: 1,
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                              transform: 'scale(1.08)',
-                              bgcolor: 'rgba(239, 68, 68, 0.1)',
-                            },
+                            p: 0.5,
+                            '& svg': { width: { xs: 28, md: 40 }, height: { xs: 28, md: 40 } },
                           }}
                         >
                           <svg
@@ -775,47 +869,50 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                     </Box>
                   </Box>
 
+                  {/* DESCRIÇÃO - Fonte pequena */}
                   <Box
                     sx={{
-                      maxHeight: 400,
+                      maxHeight: { xs: 180, sm: 250, md: 400 }, 
                       overflowY: 'auto',
-                      mb: 1.5,
+                      mb: 1,
                       pr: 1,
-                      mt: 2
+                      mt: { xs: 0.5, md: 2 }
                     }}
                   >
                     <Typography
                       variant="body2"
                       sx={{
-                        fontSize: { xs: '1.05rem', sm: '1.12rem' },
-                        color: 'black',
-                        lineHeight: 1.7,
+                        fontSize: { xs: '0.85rem', sm: '1rem', md: '1.12rem' }, // Fonte reduzida em mobile
+                        color: textColor,
+                        lineHeight: 1.5,
                       }}
                     >
-                      {product.storytelling || product.description}
+                      {product.description}
                     </Typography>
                   </Box>
                 </Box>
 
+                {/* PREÇO E BOTÕES */}
                 <Box>
                   <Box
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 2,
+                      gap: 1.5,
                       flexWrap: 'wrap',
+                      mb: 1.5, // Margem abaixo do preço
                     }}
                   >
                     <Typography
                       variant="h3"
                       sx={{
                         fontSize: {
-                          xs: '2rem',
-                          sm: '2.25rem',
+                          xs: '1.5rem', // Preço menor mobile
+                          sm: '1.8rem',
                           lg: '2.5rem',
                         },
                         fontWeight: 'bold',
-                        color: isMock ? '#6B7280' : 'black',
+                        color: isMock ? secondaryTextColor : textColor,
                         whiteSpace: 'nowrap',
                         flexShrink: 0,
                       }}
@@ -827,7 +924,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 1,
+                        gap: 0.5,
                         flexWrap: 'wrap',
                       }}
                     >
@@ -836,24 +933,18 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                           sx={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: 0.75,
+                            gap: 0.5,
                           }}
                         >
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 0.3,
-                            }}
-                          >
-                            {renderStars(effectiveAvgScore)}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                            {renderStars(effectiveAvgScore, STAR_COLOR, textColor)}
                           </Box>
                           <Typography
                             variant="body2"
                             sx={{
-                              fontSize: { xs: '1.05rem', sm: '1.1rem' },
+                              fontSize: { xs: '0.85rem', sm: '1rem', md: '1.1rem' },
                               fontWeight: 700,
-                              color: 'black',
+                              color: textColor,
                               whiteSpace: 'nowrap',
                               display: 'flex',
                               alignItems: 'center',
@@ -868,14 +959,12 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                         <Typography
                           variant="body1"
                           sx={{
-                            fontSize: { xs: '1rem', sm: '1.1rem' },
+                            fontSize: { xs: '0.85rem', sm: '1rem', md: '1.1rem' },
                             fontWeight: 500,
-                            color: isMock ? '#9CA3AF' : '#999',
+                            color: secondaryTextColor,
                           }}
                         >
-                          {isMock
-                            ? ''
-                            : 'Sem avaliações'}
+                          {isMock ? '' : 'Sem avaliações'}
                         </Typography>
                       )}
                     </Box>
@@ -884,91 +973,69 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                   <Box
                     sx={{
                       display: 'flex',
-                      flexDirection: { xs: 'column', sm: 'row' },
-                      gap: 2,
+                      // AQUI: Column em Mobile/Tablet (para não saltar fora), Row em Desktop
+                      flexDirection: { xs: 'column', md: 'row' }, 
+                      gap: { xs: 1, sm: 1.5 },
                       width: '100%',
-                      alignItems: 'center',
+                      alignItems: 'stretch', // Esticar botões em coluna
                       justifyContent: { xs: 'center', sm: 'flex-start' },
-                      mt: 2,
+                      mt: 1,
                     }}
                   >
                     <Button
                       variant="contained"
                       disabled={isMock}
                       sx={{
-                        width: { xs: '100%', sm: 'auto' },
-                        minWidth: 160,
-                        bgcolor: '#344E41',
+                        width: { xs: '100%', md: 'auto' }, // 100% largura em mobile
+                        minWidth: { xs: 'auto', md: 160 },
+                        bgcolor: BRAND_GREEN,
                         color: 'white',
-                        p: { xs: '10px 20px', sm: '14px 28px' },
-                        borderRadius: '12px',
+                        p: { xs: '8px 16px', sm: '12px 24px' }, // Padding menor
+                        borderRadius: '10px',
                         fontWeight: 'bold',
-                        fontSize: { xs: '0.98rem', sm: '1.05rem' },
+                        fontSize: { xs: '0.85rem', sm: '1rem' }, // Letra menor
                         '&:hover': {
-                          bgcolor: isMock ? '#344E41' : '#A3B18A',
-                          color: isMock ? 'white' : 'black',
+                          bgcolor: isMock ? BRAND_GREEN : alpha(BRAND_GREEN, 0.8),
+                          color: isMock ? 'white' : 'white',
                         },
                         opacity: isMock ? 0.5 : 1,
                         cursor: isMock ? 'not-allowed' : 'pointer',
-                        gap: 1.5,
+                        gap: 1,
                         boxShadow:
                           '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
                       }}
                     >
-                      <svg
-                        width="24"
-                        height="24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
-                        />
-                      </svg>{' '}
+                      <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
                       Comprar
                     </Button>
                     <Button
                       variant="contained"
                       disabled={isMock}
                       sx={{
-                        width: { xs: '100%', sm: 'auto' },
-                        bgcolor: '#588157',
-                        color: 'white',
-                        ml: { sm: 2 },
-                        p: { xs: '10px 20px', sm: '14px 28px' },
-                        borderRadius: '12px',
+                        width: { xs: '100%', md: 'auto' }, // 100% largura em mobile
+                        bgcolor: isDark ? 'white' : 'black',
+                        color: isDark ? 'black' : 'white',
+                        ml: { md: 2 }, // Só margem à esquerda em desktop
+                        p: { xs: '8px 16px', sm: '12px 24px' },
+                        borderRadius: '10px',
                         fontWeight: 'bold',
-                        fontSize: { xs: '0.98rem', sm: '1.05rem' },
+                        fontSize: { xs: '0.85rem', sm: '1rem' },
                         '&:hover': {
-                          bgcolor: isMock ? '#588157' : '#A3B18A',
-                          color: isMock ? 'white' : 'black',
+                          bgcolor: isDark ? alpha('#fff', 0.9) : alpha('#000', 0.8),
                         },
                         opacity: isMock ? 0.5 : 1,
                         cursor: isMock ? 'not-allowed' : 'pointer',
-                        gap: 1.5,
+                        gap: 1,
                         boxShadow:
                           '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
                       }}
                     >
-                      <svg
-                        width="24"
-                        height="24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                      </svg>{' '}
-                      Falar com o Vendedor
+                      <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      Falar com Vendedor
                     </Button>
                   </Box>
                 </Box>
@@ -976,21 +1043,23 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             </Grid>
           </Grid>
 
+          {/* Story Section */}
           <Box
             sx={{
-              bgcolor: '#F5F5F5',
+              bgcolor: 'transparent',
               borderRadius: '16px',
-              mt: 4,
-              p: { xs: 2, sm: 3 },
+              mt: { xs: 2.5, md: 4 },
+              p: { xs: 1.5, sm: 2.5 },
+              border: `1px solid ${BRAND_GREEN}`,
             }}
           >
             <Typography
               variant="h5"
               sx={{
                 fontWeight: 'bold',
-                color: '#344E41',
-                mb: 1,
-                fontSize: { xs: '1.2rem', sm: '1.35rem' },
+                color: BRAND_GREEN,
+                mb: 0.5,
+                fontSize: { xs: '1rem', sm: '1.35rem' },
               }}
             >
               {isMock ? 'Produto não encontrado' : 'História do Produto'}
@@ -998,20 +1067,21 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             <Typography
               variant="body1"
               sx={{
-                fontSize: { xs: '1.02rem', sm: '1.1rem' },
+                fontSize: { xs: '0.85rem', sm: '1.05rem' },
                 fontWeight: 600,
-                color: 'black',
+                color: textColor,
                 whiteSpace: 'pre-line',
-                lineHeight: 1.7,
+                lineHeight: 1.5,
               }}
             >
               {isMock
                 ? 'Não conseguimos encontrar este produto. Ele pode ter sido removido ou nunca ter existido. Experimente navegar pelas categorias ou utilizar a barra de pesquisa para encontrar algo semelhante.'
-                : product.description}
+                : product.storytelling}
             </Typography>
           </Box>
         </Box>
 
+        {/* Separador */}
         <Box
             sx={{
               bgcolor: '#F5F5F5',
@@ -1116,14 +1186,16 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
           </Box>
 
         <Box
-          sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }}
+          sx={{ height: '1px', bgcolor: alpha(BRAND_GREEN, 0.3), my: 2 }}
         />
       </Box>
 
+      {/* Specifications */}
       {!isMock && product.specifications && product.specifications.length > 0 && (
         <ProductSpecifications data={product.specifications} />
       )}
 
+      {/* Reviews, Bundles, etc */}
       <Box
         sx={{
           maxWidth: 1200,
@@ -1136,14 +1208,15 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
         }}
       >
         <Box
-          sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }}
+          sx={{ height: '1px', bgcolor: alpha(BRAND_GREEN, 0.3), my: 2 }}
         />
         <Box
           id="mips-reviews-wrapper"
           sx={{
-            bgcolor: '#E4E1D6',
+            bgcolor: bgColor,
             borderRadius: '16px',
-            p: { xs: 2.5, sm: 3, md: 3.5 },
+            border: `1px solid ${borderColor}`,
+            p: { xs: 2, sm: 3, md: 3.5 },
             position: 'relative',
           }}
         >
@@ -1158,8 +1231,9 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                 variant="h6"
                 sx={{
                   fontWeight: 'bold',
-                  color: '#4B5563',
+                  color: secondaryTextColor,
                   mb: 1,
+                  fontSize: { xs: '0.9rem', md: '1.25rem' }
                 }}
               >
                 Reviews indisponíveis para este produto
@@ -1167,8 +1241,8 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
               <Typography
                 variant="body1"
                 sx={{
-                  color: '#6B7280',
-                  fontSize: { xs: '0.98rem', sm: '1.02rem' },
+                  color: secondaryTextColor,
+                  fontSize: { xs: '0.85rem', sm: '1.02rem' },
                 }}
               >
                 Não é possível avaliar ou comentar um produto que não existe.
@@ -1176,34 +1250,40 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             </Box>
           ) : (
             <SafeComponent>
-              <ProductReviews productId={product.id} customerId={18005446} />
+              <Suspense fallback={<CircularProgress size={30} sx={{ color: BRAND_GREEN, display: 'block', mx: 'auto' }} />}>
+                <ProductReviews productId={product.id} customerId={18005446} />
+              </Suspense>
             </SafeComponent>
           )}
         </Box>
-        <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
+        <Box sx={{ height: '1px', bgcolor: alpha(BRAND_GREEN, 0.3), my: 2 }} />
       </Box>
 
       {/* Bundles suggestions */}
       <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 1.5, sm: 3, md: 0 }, display: 'flex', flexDirection: 'column', gap: 1.5, pb: 4 }}>
-        <Box sx={{ bgcolor: '#E4E1D6', borderRadius: '16px', p: { xs: 2.5, sm: 3, md: 3.5 } }}>
+        <Box sx={{ bgcolor: bgColor, borderRadius: '16px', border: `1px solid ${borderColor}`, p: { xs: 2, sm: 3, md: 3.5 } }}>
           <SafeComponent>
-            <BundleSuggestions productId={product.id} />
+            <Suspense fallback={<CircularProgress size={30} sx={{ color: BRAND_GREEN, display: 'block', mx: 'auto' }} />}>
+              <BundleSuggestions productId={product.id} />
+            </Suspense>
           </SafeComponent>
         </Box>
       </Box>
       
-      <Box sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }} />
+      <Box sx={{ height: '1px', bgcolor: alpha(BRAND_GREEN, 0.3), my: 2 }} />
 
       {!isMock && (
         <SafeComponent>
-          <ReportModal
-            externalId={String(product.id)}
-            productTitle={product.title}
-            userId={buyerId}
-            visible={showReportModal}
-            onClose={() => setShowReportModal(false)}
-            mode="light"
-          />
+          <Suspense fallback={null}>
+            <ReportModal
+              externalId={String(product.id)}
+              productTitle={product.title}
+              userId={1}
+              visible={showReportModal}
+              onClose={() => setShowReportModal(false)}
+              mode={theme.palette.mode === 'dark' ? 'dark' : 'light'}
+            />
+          </Suspense>
         </SafeComponent>
       )}
 
@@ -1212,6 +1292,12 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
 }
 
 export function ProductSpecifications({ data }: { data: ProductSpecification[] }) {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  const bgColor = isDark ? '#000000' : '#FFFFFF';
+  const textColor = isDark ? '#FFFFFF' : '#000000';
+  const borderColor = isDark ? '#333333' : '#e0e0e0';
+
   if (!data || !data.length) return null;
 
   return (
@@ -1231,18 +1317,19 @@ export function ProductSpecifications({ data }: { data: ProductSpecification[] }
           <React.Fragment key={index}>
             <Box
               sx={{
-                bgcolor: '#E4E1D6',
+                bgcolor: bgColor,
                 borderRadius: '16px',
-                p: { xs: 2.5, sm: 3, md: 3.5 },
+                border: `1px solid ${borderColor}`,
+                p: { xs: 2, sm: 3, md: 3.5 },
               }}
             >
               <Typography
                 variant="h4"
                 sx={{
-                  fontSize: { xs: '1.3rem', sm: '1.6rem' },
+                  fontSize: { xs: '1.1rem', sm: '1.6rem' },
                   fontWeight: 'bold',
-                  color: 'black',
-                  mb: 1.25,
+                  color: textColor,
+                  mb: 1,
                 }}
               >
                 {spec.title}
@@ -1250,9 +1337,9 @@ export function ProductSpecifications({ data }: { data: ProductSpecification[] }
               <Typography
                 variant="body1"
                 sx={{
-                  color: 'black',
-                  fontSize: { xs: '1.05rem', sm: '1.12rem' },
-                  lineHeight: 1.6,
+                  color: textColor,
+                  fontSize: { xs: '0.9rem', sm: '1.12rem' },
+                  lineHeight: 1.5,
                   whiteSpace: 'pre-line',
                   pl: { xs: 1, sm: 2 },
                 }}
@@ -1264,8 +1351,8 @@ export function ProductSpecifications({ data }: { data: ProductSpecification[] }
               <Box
                 sx={{
                   height: '1px',
-                  bgcolor: 'rgba(52, 78, 65, 0.3)',
-                  my: 3,
+                  bgcolor: alpha(BRAND_GREEN, 0.3), // Separador Verde
+                  my: 2,
                 }}
               />
             )}
