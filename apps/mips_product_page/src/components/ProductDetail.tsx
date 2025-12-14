@@ -1162,7 +1162,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
             <ReportModal
               externalId={String(product.id)}
               productTitle={product.title}
-              userId={sessionUserId ?? buyerId}
+              userId={1}
               visible={showReportModal}
               onClose={() => setShowReportModal(false)}
               mode={theme.palette.mode === 'dark' ? 'dark' : 'light'}
