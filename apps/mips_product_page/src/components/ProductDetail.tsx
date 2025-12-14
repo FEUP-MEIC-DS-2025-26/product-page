@@ -474,6 +474,42 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
       setIsWishlistLoading(false);
     }
   };
+  
+  const handleSellerConversation = async (their_userid: number, product_jumpseller_id: number) => {
+    const conv_api = "https://api.madeinportugal.store/api/chat";
+    
+    // Login to the "private_messages" service
+    const response = await fetch(`${conv_api}/login`, {
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      console.error("Failed to login to private_messages service.");
+      return;
+    }
+    
+    // Start a new conversation / Get ID of existing conversation
+    const body_params = new URLSearchParams({
+      "their_userid": their_userid.toString(), 
+      "product_jumpseller_id": product_jumpseller_id.toString(),
+    });
+    
+    const conversation_id: number = await fetch(
+      `${conv_api}/conversation`,
+      {
+        method: 'POST',
+        body: body_params,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'include',
+      }
+    )
+      .then((res) => res.json())
+      .then((x) => x.id);
+    
+    // Redirect to private_messages frontend
+    const relative_frontend_url = "/chat/" + conversation_id.toString();
+    window.location.replace(relative_frontend_url);
+  };
 
   if (loading) {
     return (
@@ -999,6 +1035,10 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
                     </Button>
                     <Button
                       variant="contained"
+                      // TODO: Change `their_userid` to the seller ID of this product.
+                      // The ID should correspond to a "customer" in the JumpSeller API.
+                      // For example, the ID 18497292 is reserved to the email `john@example.com` and password `john`.
+                      onClick={() => handleSellerConversation(18497292, product.id)}
                       disabled={isMock}
                       sx={{
                         width: { xs: '100%', md: 'auto' }, // 100% largura em mobile
