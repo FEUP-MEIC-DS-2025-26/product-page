@@ -1195,7 +1195,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
 
                     fetchedCertificates.map((certificate: Certificate) => {
                       const filename = certificate.bucketPath.split('/').at(-1);
-                      certificate.url = 'https://firebasestorage.googleapis.com/v0/b/made-in-portugal-certificates/o/certificates%2F' + filename;
+                      certificate.url = 'https://storage.googleapis.com/made-in-portugal-certificates/certificates/' + filename;
                     })
 
                     setCertificates(fetchedCertificates);
