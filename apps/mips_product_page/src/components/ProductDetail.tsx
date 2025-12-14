@@ -1084,31 +1084,32 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
         {/* Separador */}
         <Box
             sx={{
-              bgcolor: '#F5F5F5',
+              bgcolor: 'transparent',
               borderRadius: '16px',
-              mt: 4,
-              p: { xs: 2, sm: 3 },
+              mt: { xs: 2.5, md: 4 },
+              p: { xs: 1.5, sm: 2.5 },
+              border: `1px solid ${BRAND_GREEN}`,
             }}
           >
             <Button
               variant="contained"
               disabled={isMock}
               sx={{
-                width: { xs: '100%', sm: 'auto' },
-                bgcolor: '#588157',
+                width: { xs: '100%', md: 'auto' }, // 100% largura em mobile
+                minWidth: { xs: 'auto', md: 160 },
+                bgcolor: BRAND_GREEN,
                 color: 'white',
-                ml: { sm: 2 },
-                p: { xs: '10px 20px', sm: '14px 28px' },
-                borderRadius: '12px',
+                p: { xs: '8px 16px', sm: '12px 24px' }, // Padding menor
+                borderRadius: '10px',
                 fontWeight: 'bold',
-                fontSize: { xs: '0.98rem', sm: '1.05rem' },
+                fontSize: { xs: '0.85rem', sm: '1rem' }, // Letra menor
                 '&:hover': {
-                  bgcolor: isMock ? '#588157' : '#A3B18A',
-                  color: isMock ? 'white' : 'black',
+                  bgcolor: isMock ? BRAND_GREEN : alpha(BRAND_GREEN, 0.8),
+                  color: isMock ? 'white' : 'white',
                 },
                 opacity: isMock ? 0.5 : 1,
                 cursor: isMock ? 'not-allowed' : 'pointer',
-                gap: 1.5,
+                gap: 1,
                 boxShadow:
                   '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
               }}
@@ -1135,15 +1136,6 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
                 }
               }
             >
-              <svg
-                width="24"
-                height="24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                viewBox="0 0 24 24"
-              >
-              </svg>{' '}
               Certificados
             </Button>
             {showCertificates && (
