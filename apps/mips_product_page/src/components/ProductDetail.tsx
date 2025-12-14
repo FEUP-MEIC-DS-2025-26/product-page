@@ -527,7 +527,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
   const effectiveReviewCount = reviewSummary?.count ?? 0;
   const ratingLabel =
     effectiveReviewCount > 0
-      ? `${effectiveAvgScore.toFixed(1)} (${effectiveReviewCount})` 
+      ? `${effectiveAvgScore.toFixed(1)} (${effectiveReviewCount} ${effectiveReviewCount === 1 ? 'avaliação' : 'avaliações'})`
       : null;
 
   const isMock = isNotFound || product.id === 0;
