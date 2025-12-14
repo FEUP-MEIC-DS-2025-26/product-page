@@ -12,6 +12,8 @@ import SafeComponent from './SafeComponent';
 
 export const API_BASE_URL = 'https://api.madeinportugal.store/api';
 
+const IN_PRODUCTION = !(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
 // --- COR DA MARCA (Verde) ---
 const BRAND_GREEN = '#417F45'; 
 // --- COR DAS ESTRELAS (Amarelo) ---
@@ -81,17 +83,21 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
   const product = jumpsellerProduct.product || jumpsellerProduct;
 
   const customFieldsSpecs = product.fields
-    ? product.fields.map((field: any) => ({
-        title: field.label,
-        description: stripHtmlTags(field.value),
-      }))
+    ? product.fields
+        .filter((field: any) => 
+          field.label !== "História" && field.label !== "Historia"
+        )
+        .map((field: any) => ({
+          title: field.label,
+          description: stripHtmlTags(field.value),
+        }))
     : [];
 
   return {
     id: product.id,
     title: product.name || 'Produto sem nome',
     storytelling: stripHtmlTags(
-      product.description || 'Descrição não disponível.',
+      product.fields?.find((field: any) => field.label === "História" || field.label === "Historia")?.value ||  'História não disponível.',
     ),
     description: stripHtmlTags(
       product.description || 'Descrição não disponível.',
@@ -177,7 +183,7 @@ const renderStars = (score: number, fillColor: string, strokeColor: string) =>
     );
   });
 
-export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailProps)  {
+export default function ProductDetail({ productId, buyerId }: ProductDetailProps)  {
   const [product, setProduct] = useState<ProductFromApi | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -191,6 +197,43 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   const [showReportModal, setShowReportModal] = useState(false);
 
   const [showCustomizationModal, setShowCustomizationModal] = useState<'buyer' | 'vendor' | null>(null);
+  const [sessionUserId, setSessionUserId] = useState<number | null>(IN_PRODUCTION ? null : (buyerId ?? null));
+
+  const getUserIdFromSession = async (): Promise<number | null> => {
+    try {
+      const authenticationURL = 'https://api.madeinportugal.store/api/auth/verify';
+
+      const response = await fetch(authenticationURL, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.userID ?? null;
+    } catch (err) {
+      console.error('Error verifying session:', err);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    if (!IN_PRODUCTION) {
+      setSessionUserId(buyerId);
+      return;
+    }
+
+    const init = async () => {
+      const id = await getUserIdFromSession();
+      if (mounted) setSessionUserId(id);
+    };
+
+    init();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -350,18 +393,25 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   }, [product?.id, reviewSummary, isNotFound]);
 
   useEffect(() => {
-    if (!product?.id || !buyerId) return;
+    const effectiveBuyerId = IN_PRODUCTION ? sessionUserId : buyerId;
+    if (!product?.id || !effectiveBuyerId) return;
 
     const checkWishlist = async () => {
       try {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/check?buyerId=${buyerId}&productId=${product.id}`,
+          `${API_BASE_URL}/wishlist/check?buyerId=${effectiveBuyerId}&productId=${product.id}`,
           {
             method: 'GET',
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'include',
           }
         );
+
+        if (response.status === 401) {
+          setSessionUserId(null);
+          setIsInWishlist(false);
+          return;
+        }
 
         if (response.ok) {
           const data = await response.json();
@@ -373,23 +423,34 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
     };
 
     checkWishlist();
-  }, [product?.id, buyerId]);
+  }, [product?.id, sessionUserId, buyerId]);
 
   const handleWishlistToggle = async () => {
-    if (!product?.id || !buyerId || isWishlistLoading) return;
+    if (!product?.id || isWishlistLoading) return;
+
+    if (!sessionUserId) {
+      window.location.href = '/auth';
+      return;
+    }
+    const userIdForRequest = sessionUserId;
 
     setIsWishlistLoading(true);
 
     try {
       if (isInWishlist) {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/remove?buyerId=${buyerId}&productId=${product.id}`,
+          `${API_BASE_URL}/wishlist/remove?buyerId=${userIdForRequest}&productId=${product.id}`,
           {
             method: 'POST',
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'include',
           }
         );
+
+        if (response.status === 401) {
+          window.location.href = '/auth';
+          return;
+        }
 
         if (!response.ok) {
           throw new Error('Failed to remove from wishlist');
@@ -398,13 +459,18 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
         setIsInWishlist(false);
       } else {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/add?buyerId=${buyerId}&productId=${product.id}`,
+          `${API_BASE_URL}/wishlist/add?buyerId=${userIdForRequest}&productId=${product.id}`,
           {
             method: 'POST',
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'include',
           }
         );
+
+        if (response.status === 401) {
+          window.location.href = '/auth';
+          return;
+        }
 
         if (!response.ok) {
           throw new Error('Failed to add to wishlist');
@@ -472,7 +538,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   const effectiveReviewCount = reviewSummary?.count ?? 0;
   const ratingLabel =
     effectiveReviewCount > 0
-      ? `${effectiveAvgScore.toFixed(1)} (${effectiveReviewCount})` 
+      ? `${effectiveAvgScore.toFixed(1)} (${effectiveReviewCount} ${effectiveReviewCount === 1 ? 'avaliação' : 'avaliações'})`
       : null;
 
   const isMock = isNotFound || product.id === 0;
@@ -488,6 +554,8 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
     : photos[selectedPhotoIndex]?.alt_text || product.title;
 
   const displayPrice = isMock ? '0.00' : Number(product.price).toFixed(2);
+
+  // ...existing code...
 
   return (
     <Box sx={{ py: { xs: 1, sm: 3 } }}> 
@@ -768,7 +836,13 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       {!isMock && (
                         <IconButton
                           aria-label="Reportar produto"
-                          onClick={() => setShowReportModal(true)}
+                          onClick={() => {
+                            if (!sessionUserId) {
+                              window.location.href = '/auth';
+                              return;
+                            }
+                            setShowReportModal(true);
+                          }}
                           sx={{
                             p: 0.5,
                             '& svg': { width: { xs: 28, md: 40 }, height: { xs: 28, md: 40 } },
@@ -824,7 +898,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                         lineHeight: 1.5,
                       }}
                     >
-                      {product.storytelling || product.description}
+                      {product.description}
                     </Typography>
                   </Box>
                 </Box>
@@ -1022,7 +1096,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             >
               {isMock
                 ? 'Não conseguimos encontrar este produto. Ele pode ter sido removido ou nunca ter existido. Experimente navegar pelas categorias ou utilizar a barra de pesquisa para encontrar algo semelhante.'
-                : product.description}
+                : product.storytelling}
             </Typography>
           </Box>
         </Box>
@@ -1121,7 +1195,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             <ReportModal
               externalId={String(product.id)}
               productTitle={product.title}
-              userId={buyerId}
+              userId={1}
               visible={showReportModal}
               onClose={() => setShowReportModal(false)}
               mode={theme.palette.mode === 'dark' ? 'dark' : 'light'}
