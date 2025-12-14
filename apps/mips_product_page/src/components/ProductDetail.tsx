@@ -11,6 +11,8 @@ import SafeComponent from './SafeComponent';
 
 export const API_BASE_URL = 'https://api.madeinportugal.store/api';
 
+const IN_PRODUCTION = !(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
 // --- COR DA MARCA (Verde) ---
 const BRAND_GREEN = '#417F45'; 
 // --- COR DAS ESTRELAS (Amarelo) ---
@@ -184,6 +186,44 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
 
   const [showReportModal, setShowReportModal] = useState(false);
 
+  const [sessionUserId, setSessionUserId] = useState<number | null>(IN_PRODUCTION ? null : buyerId);
+
+  const getUserIdFromSession = async (): Promise<number | null> => {
+    try {
+      const authenticationURL = 'https://api.madeinportugal.store/api/auth/verify';
+
+      const response = await fetch(authenticationURL, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.userID ?? null;
+    } catch (err) {
+      console.error('Error verifying session:', err);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    if (!IN_PRODUCTION) {
+      setSessionUserId(buyerId);
+      return;
+    }
+
+    const init = async () => {
+      const id = await getUserIdFromSession();
+      if (mounted) setSessionUserId(id);
+    };
+
+    init();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
@@ -342,12 +382,14 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   }, [product?.id, reviewSummary, isNotFound]);
 
   useEffect(() => {
-    if (!product?.id || !buyerId) return;
+    // Determine which user id to use: session (production) or prop buyerId (dev/testing)
+    const effectiveBuyerId = IN_PRODUCTION ? sessionUserId : buyerId;
+    if (!product?.id || !effectiveBuyerId) return;
 
     const checkWishlist = async () => {
       try {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/check?buyerId=${buyerId}&productId=${product.id}`,
+          `${API_BASE_URL}/wishlist/check?buyerId=${effectiveBuyerId}&productId=${product.id}`,
           {
             method: 'GET',
             mode: 'cors',
@@ -365,17 +407,23 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
     };
 
     checkWishlist();
-  }, [product?.id, buyerId]);
+  }, [product?.id, sessionUserId, buyerId]);
 
   const handleWishlistToggle = async () => {
-    if (!product?.id || !buyerId || isWishlistLoading) return;
+    if (!product?.id || isWishlistLoading) return;
+
+    if (!sessionUserId) {
+      window.location.href = '/auth';
+      return;
+    }
+    const userIdForRequest = sessionUserId;
 
     setIsWishlistLoading(true);
 
     try {
       if (isInWishlist) {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/remove?buyerId=${buyerId}&productId=${product.id}`,
+          `${API_BASE_URL}/wishlist/remove?buyerId=${userIdForRequest}&productId=${product.id}`,
           {
             method: 'POST',
             mode: 'cors',
@@ -390,7 +438,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
         setIsInWishlist(false);
       } else {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/add?buyerId=${buyerId}&productId=${product.id}`,
+          `${API_BASE_URL}/wishlist/add?buyerId=${userIdForRequest}&productId=${product.id}`,
           {
             method: 'POST',
             mode: 'cors',
@@ -480,6 +528,8 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
     : photos[selectedPhotoIndex]?.alt_text || product.title;
 
   const displayPrice = isMock ? '0.00' : Number(product.price).toFixed(2);
+
+  // ...existing code...
 
   return (
     <Box sx={{ py: { xs: 1, sm: 3 } }}> 
@@ -760,7 +810,13 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       {!isMock && (
                         <IconButton
                           aria-label="Reportar produto"
-                          onClick={() => setShowReportModal(true)}
+                          onClick={() => {
+                            if (!sessionUserId) {
+                              window.location.href = '/auth';
+                              return;
+                            }
+                            setShowReportModal(true);
+                          }}
                           sx={{
                             p: 0.5,
                             '& svg': { width: { xs: 28, md: 40 }, height: { xs: 28, md: 40 } },
@@ -1091,7 +1147,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             <ReportModal
               externalId={String(product.id)}
               productTitle={product.title}
-              userId={buyerId}
+              userId={sessionUserId ?? buyerId}
               visible={showReportModal}
               onClose={() => setShowReportModal(false)}
               mode={theme.palette.mode === 'dark' ? 'dark' : 'light'}
