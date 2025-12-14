@@ -77,17 +77,21 @@ const mapJumpsellerToProduct = (jumpsellerProduct: any): ProductFromApi => {
   const product = jumpsellerProduct.product || jumpsellerProduct;
 
   const customFieldsSpecs = product.fields
-    ? product.fields.map((field: any) => ({
-        title: field.label,
-        description: stripHtmlTags(field.value),
-      }))
+    ? product.fields
+        .filter((field: any) => 
+          field.label !== "História" && field.label !== "Historia"
+        )
+        .map((field: any) => ({
+          title: field.label,
+          description: stripHtmlTags(field.value),
+        }))
     : [];
 
   return {
     id: product.id,
     title: product.name || 'Produto sem nome',
     storytelling: stripHtmlTags(
-      product.description || 'Descrição não disponível.',
+      product.fields?.find((field: any) => field.label === "História" || field.label === "Historia")?.value ||  'História não disponível.',
     ),
     description: stripHtmlTags(
       product.description || 'Descrição não disponível.',
@@ -874,7 +878,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
                         lineHeight: 1.5,
                       }}
                     >
-                      {product.storytelling || product.description}
+                      {product.description}
                     </Typography>
                   </Box>
                 </Box>
@@ -1063,7 +1067,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
             >
               {isMock
                 ? 'Não conseguimos encontrar este produto. Ele pode ter sido removido ou nunca ter existido. Experimente navegar pelas categorias ou utilizar a barra de pesquisa para encontrar algo semelhante.'
-                : product.description}
+                : product.storytelling}
             </Typography>
           </Box>
         </Box>
