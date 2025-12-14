@@ -388,7 +388,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
     const checkWishlist = async () => {
       try {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/check?buyerId=${effectiveBuyerId}&externalId=${product.id}`,
+          `${API_BASE_URL}/wishlist/check?buyerId=${effectiveBuyerId}&productId=${product.id}`,
           {
             method: 'GET',
             mode: 'cors',
@@ -428,7 +428,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
     try {
       if (isInWishlist) {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/remove?buyerId=${userIdForRequest}&externalId=${product.id}`,
+          `${API_BASE_URL}/wishlist/remove?buyerId=${userIdForRequest}&productId=${product.id}`,
           {
             method: 'POST',
             mode: 'cors',
@@ -448,7 +448,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
         setIsInWishlist(false);
       } else {
         const response = await fetch(
-          `${API_BASE_URL}/wishlist/add?buyerId=${userIdForRequest}&externalId=${product.id}`,
+          `${API_BASE_URL}/wishlist/add?buyerId=${userIdForRequest}&productId=${product.id}`,
           {
             method: 'POST',
             mode: 'cors',
