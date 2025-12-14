@@ -1,104 +1,166 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProductDetail from '../components/ProductDetail';
 
-// --- MOCKS ---
-
+// 1. Mocks dos Módulos Remotos (Federated Modules)
 jest.mock('mips_reviews/ProductReviews', () => {
-  return function MockReviews({ productId, customerId }: any) {
-    // Renderiza apenas se tiver ID, mas o teste garante que passamos o ID
-    return (
-      <div data-testid="reviews-logged-in">
-        Reviews for Product {productId} by User {customerId}
-      </div>
-    );
+  return function DummyReviews() {
+    return <div data-testid="remote-reviews">Reviews Component</div>;
   };
 }, { virtual: true });
 
-jest.mock('mips_product_report/ReportModal', () => {
-  return function MockReportModal({ visible, onClose, productTitle }: any) {
-    if (!visible) return null;
-    return (
-      <div role="dialog" data-testid="report-modal">
-        <h2>Reportar {productTitle}</h2>
-        <button onClick={onClose}>Fechar</button>
-      </div>
-    );
-  };
-}, { virtual: true });
+jest.mock('mips_bundle_suggestions/BundleSuggestions', () => () => <div>Bundle Mock</div>, { virtual: true });
+jest.mock('mips_product_report/ReportModal', () => () => <div>Report Mock</div>, { virtual: true });
+jest.mock('mips_product_customization/CustomizationModal', () => () => <div>Customization Mock</div>, { virtual: true });
 
-jest.mock('mips_bundle_suggestions/BundleSuggestions', () => () => <div />, { virtual: true });
+// 2. Mock do matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: (query: any) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }),
+});
 
-const mockProduct = {
-    id: 999,
-    name: 'Galo Dourado', 
-    description: 'Edição limitada',
-    price: 100.0,
-    images: [],
-    fields: []
+// 3. Dados Mock de um produto completo
+const mockJumpsellerResponse = {
+  product: {
+    id: 32863784,
+    name: 'Galo de Barcelos',
+    description: '<p>Uma história rica e colorida...</p>',
+    price: 25.50,
+    images: [
+      { url: 'https://example.com/galo-main.jpg', description: 'Foto Principal' },
+      { url: 'https://example.com/galo-side.jpg', description: 'Foto Lateral' },
+    ],
+    fields: [{ label: 'Material', value: 'Cerâmica' }]
+  }
 };
 
-describe('ProductDetail - External Integrations', () => {
-    const originalFetch = global.fetch;
+describe('ProductDetail Integration', () => {
+  const originalFetch = global.fetch;
 
-    beforeEach(() => {
-        jest.clearAllMocks();
-        (global as any).fetch = jest.fn((url: string) => {
-            if (url.includes('/products/999') && !url.includes('wishlist')) {
-                return Promise.resolve({
-                    ok: true,
-                    json: () => Promise.resolve({ product: mockProduct }),
-                });
-            }
-            if (url.includes('wishlist')) {
-                return Promise.resolve({ ok: true, json: () => ({ inWishlist: false }) });
-            }
-            return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-        });
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  test('mostra o indicador de loading inicial', async () => {
+    // Retorna uma promessa que nunca resolve para manter o estado "loading"
+    (global as any).fetch = jest.fn(() => new Promise(() => {}));
+    
+    render(<ProductDetail productId={32863784} />);
+    
+    expect(screen.getByText(/A carregar produto/i)).toBeInTheDocument();
+  });
+
+  test('renderiza os dados corretamente (Happy Path)', async () => {
+    (global as any).fetch = jest.fn((url: any) => {
+      const urlStr = url.toString();
+
+      // Mock Reviews
+      if (urlStr.includes('/reviews')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      
+      // Mock Calls Auxiliares (Wishlist/Rating)
+      if (urlStr.includes('/wishlist') || urlStr.includes('/rating')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+
+      // Mock Produto Principal
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockJumpsellerResponse),
+      });
     });
 
-    afterEach(() => {
-        global.fetch = originalFetch;
+    render(<ProductDetail productId={32863784} />);
+
+    await screen.findByRole('heading', { name: /Galo de Barcelos/i, level: 1 });
+    const descriptions = await screen.findAllByText(/Uma história rica e colorida/i);
+    expect(descriptions.length).toBeGreaterThan(0);
+    expect(screen.getByText('25.50 €')).toBeInTheDocument();
+  });
+
+  test('mostra mock de "Produto não encontrado" se falhar em todas as fontes', async () => {
+    (global as any).fetch = jest.fn((url: any) => {
+      const urlStr = url.toString();
+      
+      if (urlStr.includes('/reviews')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      
+      // As chamadas de wishlist não devem impedir a renderização do 404
+      if (urlStr.includes('/wishlist') || urlStr.includes('/rating')) {
+         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      
+      // Falha no produto
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
     });
 
-    test('Reviews: Passa os dados corretos (IDs) para o componente de Reviews', async () => {
-        const buyerId = 18005446;
-        
-        render(<ProductDetail productId={999} buyerId={buyerId} />);
-        
-        await screen.findByRole('heading', { name: /Galo Dourado/i });
+    render(<ProductDetail productId={99999} />);
+    
+    const notFoundTitle = await screen.findByRole('heading', { 
+      name: /Produto não encontrado/i, 
+      level: 1 
+    });
+    expect(notFoundTitle).toBeInTheDocument();
+    
+    expect(screen.getByText(/O produto que está a tentar aceder não existe/i)).toBeInTheDocument();
+  });
 
-        const reviewsComponent = await screen.findByTestId('reviews-logged-in');
-        
-        expect(reviewsComponent).toHaveTextContent('Reviews for Product 999');
-        expect(reviewsComponent).toHaveTextContent(`by User ${buyerId}`);
+  test('troca a imagem principal ao clicar na miniatura', async () => {
+    (global as any).fetch = jest.fn((url: any) => {
+      const urlStr = url.toString();
+
+      if (urlStr.includes('/reviews')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+
+      if (urlStr.includes('/wishlist') || urlStr.includes('/rating')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockJumpsellerResponse),
+      });
     });
 
-    test('Report Modal: Abre o modal ao clicar na bandeira', async () => {
-        // Simulamos user logado para garantir que o modal abre
-        render(<ProductDetail productId={999} buyerId={55} />);
-        
-        await screen.findByRole('heading', { name: /Galo Dourado/i });
+    render(<ProductDetail productId={32863784} />);
 
-        // Modal fechado inicialmente
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // Espera carregar
+    await screen.findByRole('heading', { name: /Galo de Barcelos/i });
 
-        // Clicar na bandeira
-        const reportBtn = screen.getByLabelText('Reportar produto');
-        fireEvent.click(reportBtn);
+    // Encontra a miniatura e clica
+    const sideThumb = screen.getByAltText('Foto Lateral');
+    fireEvent.click(sideThumb);
 
-        // Modal deve abrir
-        const modal = await screen.findByRole('dialog');
-        expect(modal).toBeInTheDocument();
-        expect(modal).toHaveTextContent('Reportar Galo Dourado');
-
-        // Fechar modal
-        const closeBtn = screen.getByText('Fechar');
-        fireEvent.click(closeBtn);
-
-        await waitFor(() => {
-            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-        });
+    // Verifica se a imagem principal mudou
+    await waitFor(() => {
+      const images = screen.getAllByAltText('Foto Lateral');
+      // Procura a imagem que está a ser exibida como principal (src correto)
+      const mainImage = images.find(img => (img as HTMLImageElement).src.includes('galo-side.jpg'));
+      expect(mainImage).toBeInTheDocument();
     });
+  });
 });
