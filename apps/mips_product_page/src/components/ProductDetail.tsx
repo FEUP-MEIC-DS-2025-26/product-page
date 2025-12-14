@@ -8,6 +8,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme, alpha } from '@mui/material/styles';
 import SafeComponent from './SafeComponent';
+import { flexDirection } from '@mui/system';
 
 export const API_BASE_URL = 'https://api.madeinportugal.store/api';
 
@@ -234,6 +235,14 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
   const targetId = productId ?? null;
   const lastSyncedCountRef = useRef(0);
 
+  interface Certificate {
+    id: string;
+    bucketPath: string;
+    url: string
+  }
+
+  const [certificates, setCertificates] = useState<Certificate[]>();
+  const [showCertificates, setShowCertificates] = useState(false);
   // --- CONFIGURAÇÃO DA PALETA ESTRITA ---
   const bgColor = isDark ? '#000000' : '#FFFFFF';
   const textColor = isDark ? '#FFFFFF' : '#000000';
@@ -1113,6 +1122,101 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
         </Box>
 
         {/* Separador */}
+        <Box
+            sx={{
+              bgcolor: 'transparent',
+              borderRadius: '16px',
+              mt: { xs: 2.5, md: 4 },
+              p: { xs: 1.5, sm: 2.5 },
+              border: `1px solid ${BRAND_GREEN}`,
+            }}
+          >
+            <Button
+              variant="contained"
+              disabled={isMock}
+              sx={{
+                width: { xs: '100%', md: 'auto' }, // 100% largura em mobile
+                minWidth: { xs: 'auto', md: 160 },
+                bgcolor: BRAND_GREEN,
+                color: 'white',
+                p: { xs: '8px 16px', sm: '12px 24px' }, // Padding menor
+                borderRadius: '10px',
+                fontWeight: 'bold',
+                fontSize: { xs: '0.85rem', sm: '1rem' }, // Letra menor
+                '&:hover': {
+                  bgcolor: isMock ? BRAND_GREEN : alpha(BRAND_GREEN, 0.8),
+                  color: isMock ? 'white' : 'white',
+                },
+                opacity: isMock ? 0.5 : 1,
+                cursor: isMock ? 'not-allowed' : 'pointer',
+                gap: 1,
+                boxShadow:
+                  '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+              }}
+              onClick={async () => {
+                  if (!certificates) {
+                    const fetchedCertificates = await fetch(`https://certificate-validation-pubsub-180908610681.europe-southwest1.run.app/certificates/${productId}`,
+                      {
+                        method: 'GET',
+                      }
+                    )
+                    .then((response) => response.json())
+                    .then((respnseJson) => respnseJson.certificates)
+                    .catch(() => []);
+
+                    fetchedCertificates.map((certificate: Certificate) => {
+                      const filename = certificate.bucketPath.split('/').at(-1);
+                      certificate.url = 'https://firebasestorage.googleapis.com/v0/b/made-in-portugal-certificates/o/certificates%2F' + filename;
+                    })
+
+                    setCertificates(fetchedCertificates);
+                  }
+
+                  setShowCertificates(!showCertificates);
+                }
+              }
+            >
+              Certificados
+            </Button>
+            {showCertificates && (
+            <div style={{display: 'flex', flexDirection: 'column'}}>
+              {certificates && certificates.length > 0 ? (
+                certificates.map((certificate) => (
+                  <Typography
+                    key={certificate.id}
+                    component='a'
+                    href={certificate.url}
+                    variant="body1"
+                    sx={{
+                      fontSize: { xs: '1.02rem', sm: '1.1rem' },
+                      fontWeight: 600,
+                      whiteSpace: 'pre-line',
+                      lineHeight: 1.7,
+                      paddingTop: 2
+                    }}
+                  >
+                    {certificate.id}
+                  </Typography>
+                ))
+              ) : (
+                <Typography
+                  variant="body1"
+                  sx={{
+                    fontSize: { xs: '1.02rem', sm: '1.1rem' },
+                    fontWeight: 600,
+                    color: 'black',
+                    whiteSpace: 'pre-line',
+                    lineHeight: 1.7,
+                    paddingTop: 2
+                  }}
+                >
+                  Este produto não tem certificados
+                </Typography>
+              )}
+            </div>
+          )}
+          </Box>
+
         <Box
           sx={{ height: '1px', bgcolor: alpha(BRAND_GREEN, 0.3), my: 2 }}
         />
