@@ -3,12 +3,16 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProductDetail from '../components/ProductDetail';
 
-// 1. Mock do Módulo Remoto (Reviews)
+// 1. Mocks dos Módulos Remotos (Federated Modules)
 jest.mock('mips_reviews/ProductReviews', () => {
   return function DummyReviews() {
     return <div data-testid="remote-reviews">Reviews Component</div>;
   };
 }, { virtual: true });
+
+jest.mock('mips_bundle_suggestions/BundleSuggestions', () => () => <div>Bundle Mock</div>, { virtual: true });
+jest.mock('mips_product_report/ReportModal', () => () => <div>Report Mock</div>, { virtual: true });
+jest.mock('mips_product_customization/CustomizationModal', () => () => <div>Customization Mock</div>, { virtual: true });
 
 // 2. Mock do matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -25,7 +29,7 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
-// 3. Dados Mock
+// 3. Dados Mock de um produto completo
 const mockJumpsellerResponse = {
   product: {
     id: 32863784,
@@ -55,16 +59,29 @@ describe('ProductDetail Integration', () => {
   });
 
   test('mostra o indicador de loading inicial', async () => {
+    // Retorna uma promessa que nunca resolve para manter o estado "loading"
     (global as any).fetch = jest.fn(() => new Promise(() => {}));
+    
     render(<ProductDetail productId={32863784} />);
+    
     expect(screen.getByText(/A carregar produto/i)).toBeInTheDocument();
   });
 
   test('renderiza os dados corretamente (Happy Path)', async () => {
     (global as any).fetch = jest.fn((url: any) => {
-      if (url.toString().includes('/reviews')) {
+      const urlStr = url.toString();
+
+      // Mock Reviews
+      if (urlStr.includes('/reviews')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
+      
+      // Mock Calls Auxiliares (Wishlist/Rating)
+      if (urlStr.includes('/wishlist') || urlStr.includes('/rating')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+
+      // Mock Produto Principal
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(mockJumpsellerResponse),
@@ -81,10 +98,18 @@ describe('ProductDetail Integration', () => {
 
   test('mostra mock de "Produto não encontrado" se falhar em todas as fontes', async () => {
     (global as any).fetch = jest.fn((url: any) => {
-      if (url.toString().includes('/reviews')) {
+      const urlStr = url.toString();
+      
+      if (urlStr.includes('/reviews')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
       
+      // As chamadas de wishlist não devem impedir a renderização do 404
+      if (urlStr.includes('/wishlist') || urlStr.includes('/rating')) {
+         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      
+      // Falha no produto
       return Promise.resolve({
         ok: false,
         status: 404,
@@ -93,7 +118,8 @@ describe('ProductDetail Integration', () => {
     });
 
     render(<ProductDetail productId={99999} />);
-  const notFoundTitle = await screen.findByRole('heading', { 
+    
+    const notFoundTitle = await screen.findByRole('heading', { 
       name: /Produto não encontrado/i, 
       level: 1 
     });
@@ -104,9 +130,16 @@ describe('ProductDetail Integration', () => {
 
   test('troca a imagem principal ao clicar na miniatura', async () => {
     (global as any).fetch = jest.fn((url: any) => {
-      if (url.toString().includes('/reviews')) {
+      const urlStr = url.toString();
+
+      if (urlStr.includes('/reviews')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
+
+      if (urlStr.includes('/wishlist') || urlStr.includes('/rating')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve(mockJumpsellerResponse),
@@ -115,13 +148,17 @@ describe('ProductDetail Integration', () => {
 
     render(<ProductDetail productId={32863784} />);
 
+    // Espera carregar
     await screen.findByRole('heading', { name: /Galo de Barcelos/i });
 
+    // Encontra a miniatura e clica
     const sideThumb = screen.getByAltText('Foto Lateral');
     fireEvent.click(sideThumb);
 
+    // Verifica se a imagem principal mudou
     await waitFor(() => {
       const images = screen.getAllByAltText('Foto Lateral');
+      // Procura a imagem que está a ser exibida como principal (src correto)
       const mainImage = images.find(img => (img as HTMLImageElement).src.includes('galo-side.jpg'));
       expect(mainImage).toBeInTheDocument();
     });
