@@ -7,6 +7,7 @@ import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme, alpha } from '@mui/material/styles';
+import SettingsIcon from '@mui/icons-material/Settings';
 import SafeComponent from './SafeComponent';
 import { flexDirection } from '@mui/system';
 
@@ -30,6 +31,11 @@ const BundleSuggestions = React.lazy(
 const ReportModal = React.lazy(
   () => import("mips_product_report/ReportModal")
 );
+
+const ProductCustomizationModal = React.lazy(
+  () => import("mips_product_customization/CustomizationModal")
+);
+
 
 // --- TYPES ---
 type ProductSpecification = {
@@ -191,6 +197,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
 
   const [showReportModal, setShowReportModal] = useState(false);
 
+  const [showCustomizationModal, setShowCustomizationModal] = useState<'buyer' | 'vendor' | null>(null);
   const [sessionUserId, setSessionUserId] = useState<number | null>(IN_PRODUCTION ? null : (buyerId ?? null));
 
   const getUserIdFromSession = async (): Promise<number | null> => {
@@ -902,6 +909,19 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
                           </svg>
                         </IconButton>
                       )}
+
+                      {!isMock && (
+                        <IconButton
+                          aria-label="Customizar produto"
+                          onClick={() => setShowCustomizationModal('vendor')}
+                          sx={{
+                            p: 0.5,
+                            '& svg': { width: { xs: 28, md: 40 }, height: { xs: 28, md: 40 } },
+                          }}
+                        >
+                         <SettingsIcon/>
+                        </IconButton>
+                      )}
                     </Box>
                   </Box>
 
@@ -1021,6 +1041,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
                     <Button
                       variant="contained"
                       disabled={isMock}
+                      onClick={() => setShowCustomizationModal('buyer')}
                       sx={{
                         width: { xs: '100%', md: 'auto' }, // 100% largura em mobile
                         minWidth: { xs: 'auto', md: 160 },
@@ -1082,6 +1103,14 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
               </Box>
             </Grid>
           </Grid>
+
+          <ProductCustomizationModal
+            showModal={showCustomizationModal}
+            setShowModal={setShowCustomizationModal}
+            productId={product.id}
+            price={Number(product.price)}
+            stock={10}
+          />
 
           {/* Story Section */}
           <Box
