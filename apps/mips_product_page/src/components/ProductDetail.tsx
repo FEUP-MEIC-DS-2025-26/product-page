@@ -1038,7 +1038,7 @@ export default function ProductDetail({ productId, buyerId }: ProductDetailProps
                       // TODO: Change `their_userid` to the seller ID of this product.
                       // The ID should correspond to a "customer" in the JumpSeller API.
                       // For example, the ID 18497292 is reserved to the email `john@example.com` and password `john`.
-                      onClick={() => handleSellerConversation(18497292, product.id)}
+                      onClick={() => handleSellerConversation(18577315, product.id)}
                       disabled={isMock}
                       sx={{
                         width: { xs: '100%', md: 'auto' }, // 100% largura em mobile
