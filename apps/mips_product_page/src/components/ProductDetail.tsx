@@ -188,6 +188,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   interface Certificate {
     id: string;
     bucketPath: string;
+    url: string
   }
 
   const [certificates, setCertificates] = useState<Certificate[]>();
@@ -993,37 +994,17 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       onClick={async () => {
                           if (!certificates) {
                             const fetchedCertificates = await fetch(`https://certificate-validation-pubsub-180908610681.europe-southwest1.run.app/certificates/${productId}/`,
-                            //const certificates = await fetch(`http://localhost:8081/certificates/banana`,
                               {
                                 method: 'GET',
                               }
                             )
-                            .then((response) => {
-                              console.log(response)
-                              return response.json()
-                            })
+                            .then((response) => response.json())
                             .then((respnseJson) => respnseJson.certificates);
 
-                            console.log(fetchedCertificates);
-
-                            /*
-                            if (certificates.length == 0) return <div>This product has no certificates</div>
-
-                            let certificatesButtons = [];
-                            for (const certificate of certificates) {
-                              certificatesButtons.push(
-                                <div key={certificate.id}>
-                                  <a
-                                    href={certificate.bucketPath}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    {certificate.id}
-                                  </a>
-                                </div>
-                              )
-                            }
-                            */
+                            fetchedCertificates.map((certificate: Certificate) => {
+                              const filename = certificate.bucketPath.split('/').at(-1);
+                              certificate.url = 'https://firebasestorage.googleapis.com/v0/b/made-in-portugal-certificates/o/certificates%2F' + filename;
+                            })
 
                             setCertificates(fetchedCertificates);
                           }
@@ -1055,7 +1036,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                 certificates.map((certificate) => (
                   <div key={certificate.id}>
                     <a
-                      href={certificate.bucketPath}
+                      href={certificate.url}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
