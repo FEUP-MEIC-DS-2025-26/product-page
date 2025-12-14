@@ -970,111 +970,11 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
                       </svg>{' '}
                       Falar com o Vendedor
                     </Button>
-                    <Button
-                      variant="contained"
-                      disabled={isMock}
-                      sx={{
-                        width: { xs: '100%', sm: 'auto' },
-                        bgcolor: '#588157',
-                        color: 'white',
-                        ml: { sm: 2 },
-                        p: { xs: '10px 20px', sm: '14px 28px' },
-                        borderRadius: '12px',
-                        fontWeight: 'bold',
-                        fontSize: { xs: '0.98rem', sm: '1.05rem' },
-                        '&:hover': {
-                          bgcolor: isMock ? '#588157' : '#A3B18A',
-                          color: isMock ? 'white' : 'black',
-                        },
-                        opacity: isMock ? 0.5 : 1,
-                        cursor: isMock ? 'not-allowed' : 'pointer',
-                        gap: 1.5,
-                        boxShadow:
-                          '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
-                      }}
-                      onClick={async () => {
-                          if (!certificates) {
-                            const fetchedCertificates = await fetch(`https://certificate-validation-pubsub-180908610681.europe-southwest1.run.app/certificates/${productId}/`,
-                              {
-                                method: 'GET',
-                              }
-                            )
-                            .then((response) => response.json())
-                            .then((respnseJson) => respnseJson.certificates)
-                            .catch(() => []);
-
-                            fetchedCertificates.map((certificate: Certificate) => {
-                              const filename = certificate.bucketPath.split('/').at(-1);
-                              certificate.url = 'https://firebasestorage.googleapis.com/v0/b/made-in-portugal-certificates/o/certificates%2F' + filename;
-                            })
-
-                            setCertificates(fetchedCertificates);
-                          }
-
-                          setShowCertificates(!showCertificates);
-                        }
-                      }
-                    >
-                      <svg
-                        width="24"
-                        height="24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        viewBox="0 0 24 24"
-                      >
-                      </svg>{' '}
-                      Certificados
-                    </Button>
                   </Box>
                 </Box>
               </Box>
             </Grid>
           </Grid>
-
-          {showCertificates && (
-            <Box
-              style={{display: 'flex', alignItems: 'flex-end', flexDirection: 'column'}}
-              sx={{
-                bgcolor: '#F5F5F5',
-                borderRadius: '16px',
-                mt: 4,
-                p: { xs: 2, sm: 3 },
-              }}
-            >
-              {certificates && certificates.length > 0 ? (
-                certificates.map((certificate) => (
-                  <Typography
-                    key={certificate.id}
-                    component='a'
-                    href={certificate.url}
-                    variant="body1"
-                    sx={{
-                      fontSize: { xs: '1.02rem', sm: '1.1rem' },
-                      fontWeight: 600,
-                      whiteSpace: 'pre-line',
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    {certificate.id}
-                  </Typography>
-                ))
-              ) : (
-                <Typography
-                  variant="body1"
-                  sx={{
-                    fontSize: { xs: '1.02rem', sm: '1.1rem' },
-                    fontWeight: 600,
-                    color: 'black',
-                    whiteSpace: 'pre-line',
-                    lineHeight: 1.7,
-                  }}
-                >
-                  Este produto não tem certificados
-                </Typography>
-              )}
-            </Box>
-          )}
 
           <Box
             sx={{
@@ -1111,6 +1011,109 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
             </Typography>
           </Box>
         </Box>
+
+        <Box
+            sx={{
+              bgcolor: '#F5F5F5',
+              borderRadius: '16px',
+              mt: 4,
+              p: { xs: 2, sm: 3 },
+            }}
+          >
+            <Button
+              variant="contained"
+              disabled={isMock}
+              sx={{
+                width: { xs: '100%', sm: 'auto' },
+                bgcolor: '#588157',
+                color: 'white',
+                ml: { sm: 2 },
+                p: { xs: '10px 20px', sm: '14px 28px' },
+                borderRadius: '12px',
+                fontWeight: 'bold',
+                fontSize: { xs: '0.98rem', sm: '1.05rem' },
+                '&:hover': {
+                  bgcolor: isMock ? '#588157' : '#A3B18A',
+                  color: isMock ? 'white' : 'black',
+                },
+                opacity: isMock ? 0.5 : 1,
+                cursor: isMock ? 'not-allowed' : 'pointer',
+                gap: 1.5,
+                boxShadow:
+                  '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+              }}
+              onClick={async () => {
+                  if (!certificates) {
+                    const fetchedCertificates = await fetch(`https://certificate-validation-pubsub-180908610681.europe-southwest1.run.app/certificates/${productId}`,
+                      {
+                        method: 'GET',
+                      }
+                    )
+                    .then((response) => response.json())
+                    .then((respnseJson) => respnseJson.certificates)
+                    .catch(() => []);
+
+                    fetchedCertificates.map((certificate: Certificate) => {
+                      const filename = certificate.bucketPath.split('/').at(-1);
+                      certificate.url = 'https://firebasestorage.googleapis.com/v0/b/made-in-portugal-certificates/o/certificates%2F' + filename;
+                    })
+
+                    setCertificates(fetchedCertificates);
+                  }
+
+                  setShowCertificates(!showCertificates);
+                }
+              }
+            >
+              <svg
+                width="24"
+                height="24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                viewBox="0 0 24 24"
+              >
+              </svg>{' '}
+              Certificados
+            </Button>
+            {showCertificates && (
+            <div style={{display: 'flex', flexDirection: 'column'}}>
+              {certificates && certificates.length > 0 ? (
+                certificates.map((certificate) => (
+                  <Typography
+                    key={certificate.id}
+                    component='a'
+                    href={certificate.url}
+                    variant="body1"
+                    sx={{
+                      fontSize: { xs: '1.02rem', sm: '1.1rem' },
+                      fontWeight: 600,
+                      whiteSpace: 'pre-line',
+                      lineHeight: 1.7,
+                      paddingTop: 2
+                    }}
+                  >
+                    {certificate.id}
+                  </Typography>
+                ))
+              ) : (
+                <Typography
+                  variant="body1"
+                  sx={{
+                    fontSize: { xs: '1.02rem', sm: '1.1rem' },
+                    fontWeight: 600,
+                    color: 'black',
+                    whiteSpace: 'pre-line',
+                    lineHeight: 1.7,
+                    paddingTop: 2
+                  }}
+                >
+                  Este produto não tem certificados
+                </Typography>
+              )}
+            </div>
+          )}
+          </Box>
 
         <Box
           sx={{ height: '1px', bgcolor: 'rgba(52, 78, 65, 0.3)', my: 3 }}
