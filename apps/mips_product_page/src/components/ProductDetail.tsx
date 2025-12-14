@@ -173,7 +173,7 @@ const renderStars = (score: number, fillColor: string, strokeColor: string) =>
     );
   });
 
-export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailProps)  {
+export default function ProductDetail({ productId, buyerId }: ProductDetailProps)  {
   const [product, setProduct] = useState<ProductFromApi | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -186,7 +186,7 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
 
   const [showReportModal, setShowReportModal] = useState(false);
 
-  const [sessionUserId, setSessionUserId] = useState<number | null>(IN_PRODUCTION ? null : buyerId);
+  const [sessionUserId, setSessionUserId] = useState<number | null>(IN_PRODUCTION ? null : (buyerId ?? null));
 
   const getUserIdFromSession = async (): Promise<number | null> => {
     try {
@@ -382,7 +382,6 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
   }, [product?.id, reviewSummary, isNotFound]);
 
   useEffect(() => {
-    // Determine which user id to use: session (production) or prop buyerId (dev/testing)
     const effectiveBuyerId = IN_PRODUCTION ? sessionUserId : buyerId;
     if (!product?.id || !effectiveBuyerId) return;
 
@@ -393,9 +392,15 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
           {
             method: 'GET',
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'include',
           }
         );
+
+        if (response.status === 401) {
+          setSessionUserId(null);
+          setIsInWishlist(false);
+          return;
+        }
 
         if (response.ok) {
           const data = await response.json();
@@ -427,9 +432,14 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
           {
             method: 'POST',
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'include',
           }
         );
+
+        if (response.status === 401) {
+          window.location.href = '/auth';
+          return;
+        }
 
         if (!response.ok) {
           throw new Error('Failed to remove from wishlist');
@@ -442,9 +452,14 @@ export default function ProductDetail({ productId, buyerId = 1 }: ProductDetailP
           {
             method: 'POST',
             mode: 'cors',
-            credentials: 'omit',
+            credentials: 'include',
           }
         );
+
+        if (response.status === 401) {
+          window.location.href = '/auth';
+          return;
+        }
 
         if (!response.ok) {
           throw new Error('Failed to add to wishlist');
