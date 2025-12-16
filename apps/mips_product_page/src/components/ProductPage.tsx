@@ -4,7 +4,7 @@ import App from "../App";
 
 const ProductPage = () => {
   const params = useParams();
-  const productId = params.id || params.sku || params.productId || "32863784";
+  const productId = params.id || params.sku || params.productId || "33007106";
 
   return <App initialProductId={productId} />;
 };

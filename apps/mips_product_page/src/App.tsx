@@ -53,7 +53,7 @@ const App = ({ initialProductId }: AppProps) => {
     }
   }, []);
 
-  const productId = initialProductId ?? "32863784";
+  const productId = initialProductId ?? "33007106";
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>

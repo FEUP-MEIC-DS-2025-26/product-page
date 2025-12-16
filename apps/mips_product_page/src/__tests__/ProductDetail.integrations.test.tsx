@@ -32,7 +32,7 @@ Object.defineProperty(window, 'matchMedia', {
 // 3. Dados Mock de um produto completo
 const mockJumpsellerResponse = {
   product: {
-    id: 32863784,
+    id: 33007106,
     name: 'Galo de Barcelos',
     description: '<p>Uma história rica e colorida...</p>',
     price: 25.50,
@@ -62,7 +62,7 @@ describe('ProductDetail Integration', () => {
     // Retorna uma promessa que nunca resolve para manter o estado "loading"
     (global as any).fetch = jest.fn(() => new Promise(() => {}));
     
-    render(<ProductDetail productId={32863784} />);
+    render(<ProductDetail productId={33007106} />);
     
     expect(screen.getByText(/A carregar produto/i)).toBeInTheDocument();
   });
@@ -88,7 +88,7 @@ describe('ProductDetail Integration', () => {
       });
     });
 
-    render(<ProductDetail productId={32863784} />);
+    render(<ProductDetail productId={33007106} />);
 
     await screen.findByRole('heading', { name: /Galo de Barcelos/i, level: 1 });
     const descriptions = await screen.findAllByText(/Uma história rica e colorida/i);
@@ -146,7 +146,7 @@ describe('ProductDetail Integration', () => {
       });
     });
 
-    render(<ProductDetail productId={32863784} />);
+    render(<ProductDetail productId={33007106} />);
 
     // Espera carregar
     await screen.findByRole('heading', { name: /Galo de Barcelos/i });

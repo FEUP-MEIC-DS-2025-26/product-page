@@ -29,7 +29,7 @@ describe('ProductDetail — Testes de Aceitação', () => {
 
   beforeEach(() => {
     // [CORREÇÃO] Usamos '*' em vez de '1' para garantir que apanha o pedido
-    // mesmo que a app use o ID de fallback (32863784).
+    // mesmo que a app use o ID de fallback (33007106).
     cy.intercept(
       'GET', 
       '**/api/products/*', 
